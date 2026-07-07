@@ -11,7 +11,7 @@ M.defaults = {
   },
   health_check = {
     auto = true,
-    tools = { "adb", "java", "git" },
+    tools = { "adb", "java", "git", "flutter", "gradle" },
   },
   logcat = {
     max_lines = 5000,

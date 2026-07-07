@@ -182,12 +182,8 @@ function M.select()
       M.close()
       require("anvim.logcat").open()
     elseif item.task == "check" then
-      modules()
-      local h = health_m.check_configured(config_m.get().health_check.tools)
-      for name, r in pairs(h.tools) do
-        print(health_m.format_line(name, r))
-      end
-      print(string.format("Summary: %d OK, %d missing", h.summary.ok, h.summary.err))
+      M.close()
+      require("anvim.help_check").interactive()
     elseif item.task == "devices" then
       local dl = devices_m.list()
       vim.notify("[anvim] Found " .. #dl .. " device(s)", vim.log.levels.INFO)

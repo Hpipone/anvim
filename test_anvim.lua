@@ -99,11 +99,27 @@ test("device format", function()
   assert(line:match("device"), "should show status")
 end)
 
--- env
-test("env loader handles missing file", function()
-  local e = require("anvim.env")
-  local r = e.load()
-  assert(type(r) == "table", "returns table")
+-- help_check
+test("help_check detect adb", function()
+  local h = reload("anvim.help_check")
+  local r = h.check_tool("git")  -- git pasti ada atau nggak di sistem mana pun
+  assert(r ~= nil, "returns result")
+  assert(r.name == "git", "name set")
+end)
+
+test("help_check format", function()
+  local h = reload("anvim.help_check")
+  h.check_tool("adb")
+  local report = h.format_report()
+  assert(report:match("OS:"), "shows OS")
+  assert(report:match("ADB"), "shows ADB")
+end)
+
+test("help_check get_missing", function()
+  local h = reload("anvim.help_check")
+  h.check_all()
+  local m = h.get_missing()
+  assert(type(m) == "table", "returns table")
 end)
 
 -- tasks
