@@ -18,10 +18,9 @@ TUI dashboard inside Neovim — alternative to Android Studio. Inspired by lazyg
 - Neovim >= 0.9.0
 - ADB, Java (for Android), Flutter (for Flutter projects) on PATH
 
-## Installation
-
+## How to use
+Add code in your config file
 ```lua
--- lazy.nvim
 {
   "Hpipone/anvim",
   opts = {},
