@@ -1,0 +1,112 @@
+*anvim.txt* Android/Flutter Development Dashboard for Neovim
+
+==============================================================================
+CONTENTS                                     *anvim*
+
+  1. Introduction .............. |anvim-introduction|
+  2. Installation .............. |anvim-installation|
+  3. Commands .................. |anvim-commands|
+  4. Keymaps ................... |anvim-keymaps|
+  5. Configuration ............. |anvim-configuration|
+  6. Health Check .............. |anvim-health|
+  7. License ................... |anvim-license|
+
+==============================================================================
+1. INTRODUCTION                                    *anvim-introduction*
+
+anvim is a TUI dashboard for Android and Flutter development inside Neovim.
+It provides an interactive keyboard-driven interface for running tasks,
+viewing logcat, and managing devices — eliminating the need for Android Studio.
+
+Features:
+  - Project auto-detection (Flutter vs Android/Gradle)
+  - System health check (ADB, Java, Flutter, Git)
+  - Task runner (build, clean, run)
+  - Logcat viewer with live filtering
+  - Device management (list, select active device)
+
+==============================================================================
+2. INSTALLATION                                    *anvim-installation*
+
+Using lazy.nvim:
+>lua
+  {
+    "your-username/anvim",
+    opts = {},
+  }
+<
+
+Using packer.nvim:
+>lua
+  use {
+    "your-username/anvim",
+    config = function() require("anvim").setup({}) end,
+  }
+<
+
+==============================================================================
+3. COMMANDS                                        *anvim-commands*
+
+  :Anvim           Open the anvim dashboard
+  :AnvimCheck      Run system health check
+  :AnvimLogcat     Open logcat viewer
+
+==============================================================================
+4. KEYMAPS                                          *anvim-keymaps*
+
+Default:
+  <leader>ad       Open dashboard
+  <leader>al       Open logcat
+
+Dashboard navigation:
+  j / k            Navigate up/down
+  Enter            Select item
+  q / Esc          Close dashboard
+  c                Run health check
+  r                Run app
+  l                Open logcat
+
+Logcat viewer:
+  V / D / I / W / E / F   Filter by log level
+  /                       Search within logs
+  q / Esc                 Close
+
+==============================================================================
+5. CONFIGURATION                                  *anvim-configuration*
+
+>lua
+  require("anvim").setup({
+    dashboard = {
+      width = 0.8,
+      height = 0.8,
+      border = "rounded",
+    },
+    health_check = {
+      auto = true,
+      tools = { "adb", "java", "git" },
+    },
+    logcat = {
+      max_lines = 5000,
+      filter_default = "I",
+    },
+  })
+<
+
+Set vim.g.anvim_no_default_keymaps = true to skip default keymaps.
+
+==============================================================================
+6. HEALTH CHECK                                      *anvim-health*
+
+anvim checks for these tools on startup:
+  - ADB          Android Debug Bridge
+  - Java         Java runtime (Gradle builds)
+  - Flutter      Flutter SDK (Flutter projects)
+  - Git          Version control
+
+Missing tools show a clear message with install instructions.
+Use :AnvimCheck anytime to re-run the health check.
+
+==============================================================================
+7. LICENSE                                            *anvim-license*
+
+MIT
