@@ -23,7 +23,7 @@ M.defaults = {
 }
 
 function M.setup(opts)
-  M.config = vim.tbl_deep_extend("keep", opts or {}, M.defaults)
+  M.config = vim.tbl_deep_extend("force", M.defaults, opts or {})
   return M.config
 end
 

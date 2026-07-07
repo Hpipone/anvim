@@ -1,10 +1,13 @@
 -- anvim: entry point — setup, commands, keymaps
--- ponytail: minimal init, no autocommand group for this
+-- ponytail: guard command doang, config tiap kali di-merge
 
 local M = {}
 
 function M.setup(opts)
   require("anvim.config").setup(opts)
+
+  if vim.g.anvim_loaded then return end
+  vim.g.anvim_loaded = 1
 
   vim.api.nvim_create_user_command("Anvim", function()
     require("anvim.dashboard").open()
