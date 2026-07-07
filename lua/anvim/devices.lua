@@ -8,13 +8,15 @@ M.state = {
 }
 
 function M.list()
-  if vim.fn.executable("adb") == 0 then
+  local ok_check, _ = pcall(vim.fn.executable, "adb")
+  if not ok_check or vim.fn.executable("adb") == 0 then
     M.state.list = {}
     return {}
   end
 
   local ok, out = pcall(vim.fn.system, "adb devices -l 2>/dev/null")
   if not ok or out == "" then
+    if not ok then vim.notify("[anvim] ERROR devices: adb devices gagal — " .. tostring(out), vim.log.levels.DEBUG) end
     M.state.list = {}
     return {}
   end

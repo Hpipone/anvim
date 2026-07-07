@@ -7,69 +7,65 @@ local function has_file(name)
 end
 
 function M.detect()
-  if has_file("pubspec.yaml") then
-    return M.detect_flutter()
+  local ok, result = pcall(function()
+    if has_file("pubspec.yaml") then return M.detect_flutter() end
+    if has_file("settings.gradle") or has_file("settings.gradle.kts") or has_file("build.gradle") then return M.detect_android() end
+    return nil
+  end)
+  if not ok then
+    vim.notify("[anvim] ERROR project detect: " .. tostring(result), vim.log.levels.ERROR)
   end
-  if has_file("settings.gradle") or has_file("settings.gradle.kts") or has_file("build.gradle") then
-    return M.detect_android()
+  if not ok or result == nil then
+    return {
+      type = "unknown",
+      name = vim.fn.fnamemodify(vim.fn.getcwd(), ":t"),
+      build_tool = nil, package = nil, version = nil,
+    }
   end
-
-  return {
-    type = "unknown",
-    name = vim.fn.fnamemodify(vim.fn.getcwd(), ":t"),
-    build_tool = nil,
-    package = nil,
-    version = nil,
-  }
+  return result
 end
 
 function M.detect_flutter()
   local name = "unknown"
   local pkg, ver = nil, nil
-
-  -- Try pubspec.yaml for name/version
   if has_file("pubspec.yaml") then
-    for line in io.lines("pubspec.yaml") do
-      local n = line:match('^name:%s*(.+)$')
-      if n then name = vim.trim(n) end
-      local v = line:match('^version:%s*(.+)$')
-      if v then ver = vim.trim(v) end
+    local f, open_err = io.open("pubspec.yaml", "r")
+    if f then
+      for line in f:lines() do
+        local n = line:match('^name:%s*(.+)$')
+        if n then name = vim.trim(n) end
+        local v = line:match('^version:%s*(.+)$')
+        if v then ver = vim.trim(v) end
+      end
+      f:close()
+    else
+      vim.notify("[anvim] ERROR project: buka pubspec.yaml gagal — " .. tostring(open_err), vim.log.levels.DEBUG)
     end
   end
-
-  return {
-    type = "flutter",
-    name = name,
-    build_tool = "flutter",
-    package = pkg,
-    version = ver,
-  }
+  return { type = "flutter", name = name, build_tool = "flutter", package = pkg, version = ver }
 end
 
 function M.detect_android()
   local name = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
   local build_tool = has_file("gradlew") and "./gradlew" or "gradle"
   local pkg, ver = nil, nil
-
-  -- Quick scan build.gradle for package/version
-  for _, f in ipairs({ "build.gradle", "app/build.gradle" }) do
-    if has_file(f) then
-      for line in io.lines(f) do
-        local ns = line:match('namespace%s+(.+)$')
-        if ns then pkg = ns end
-        local vn = line:match("versionName%s+(.+)$")
-        if vn then ver = vn end
+  for _, fname in ipairs({ "build.gradle", "app/build.gradle" }) do
+    if has_file(fname) then
+      local f, err = io.open(fname, "r")
+      if f then
+        for line in f:lines() do
+          local ns = line:match('namespace%s+(.+)$')
+          if ns then pkg = ns end
+          local vn = line:match("versionName%s+(.+)$")
+          if vn then ver = vn end
+        end
+        f:close()
+      else
+        vim.notify("[anvim] ERROR project: buka " .. fname .. " gagal — " .. tostring(err), vim.log.levels.DEBUG)
       end
     end
   end
-
-  return {
-    type = "android",
-    name = name,
-    build_tool = build_tool,
-    package = pkg,
-    version = ver,
-  }
+  return { type = "android", name = name, build_tool = build_tool, package = pkg, version = ver }
 end
 
 return M

@@ -16,74 +16,6 @@ local levels = {
   F = "FATAL",
 }
 
-function M.open(filter)
-  if M.running then
-    vim.notify("[anvim] Logcat already running in buffer " .. M.buf, vim.log.levels.WARN)
-    return
-  end
-
-  filter = filter or "I"
-  local buf = vim.api.nvim_create_buf(false, true)
-  M.buf = buf
-
-  local win_opts = {
-    relative = "editor",
-    width = math.floor(vim.o.columns * 0.9),
-    height = math.floor(vim.o.lines * 0.7),
-    col = math.floor(vim.o.columns * 0.05),
-    row = math.floor(vim.o.lines * 0.1),
-    style = "minimal",
-    border = "rounded",
-  }
-  local win = vim.api.nvim_open_win(buf, true, win_opts)
-
-  vim.api.nvim_buf_set_name(buf, "anvim://logcat")
-  vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
-  vim.api.nvim_buf_set_option(buf, "filetype", "logcat")
-  vim.api.nvim_buf_set_option(buf, "modifiable", true)
-  vim.api.nvim_win_set_option(win, "wrap", false)
-
-  -- Bind close
-  vim.api.nvim_buf_set_keymap(buf, "n", "q", "<cmd>bdelete!<CR>", { nowait = true, silent = true, desc = "Close logcat" })
-  vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", "<cmd>bdelete!<CR>", { nowait = true, silent = true, desc = "Close logcat" })
-  vim.api.nvim_buf_set_keymap(buf, "n", "<C-c>", "<cmd>stopinsert<CR>", { nowait = true, silent = true })
-  -- Filter keys — capture current filter
-  for k, _ in pairs(levels) do
-    local level_key = k
-    vim.api.nvim_buf_set_keymap(buf, "n", k, "", {
-      nowait = true, silent = true,
-      callback = function() M.restart(level_key) end,
-      desc = "Filter " .. levels[k],
-    })
-  end
-  -- Search
-  vim.api.nvim_buf_set_keymap(buf, "n", "/", "/", { nowait = true, silent = false })
-
-  M.running = true
-  start_logcat(buf, filter)
-
-  vim.notify("[anvim] Logcat opened | Filter keys: V/D/I/W/E/F | / = search | q = quit", vim.log.levels.INFO)
-end
-
-function M.restart(filter)
-  M.stop()
-  vim.wait(200, function() return not M.running end, 50)
-  M.open(filter)
-end
-
-function M.stop()
-  M.running = false
-  if M.job_id then
-    pcall(vim.fn.jobstop, M.job_id)
-    M.job_id = nil
-  end
-  if M.timer then
-    M.timer:stop()
-    M.timer:close()
-    M.timer = nil
-  end
-end
-
 local function start_logcat(buf, filter)
   local cmd = { "adb", "logcat", "-v", "color", "-s", filter and levels[filter] or "I", "*:" .. (filter or "I") }
 
@@ -96,16 +28,15 @@ local function start_logcat(buf, filter)
         return
       end
       pcall(vim.api.nvim_buf_set_option, buf, "modifiable", true)
-      local lines = {}
+      local content = {}
       for _, line in ipairs(data) do
         if line ~= "" then
-          table.insert(lines, line)
+          table.insert(content, line)
         end
       end
-      if #lines > 0 then
+      if #content > 0 then
         local last = vim.api.nvim_buf_line_count(buf)
-        vim.api.nvim_buf_set_lines(buf, last, last, false, lines)
-        -- Trim excess lines
+        vim.api.nvim_buf_set_lines(buf, last, last, false, content)
         local max = vim.g.anvim_logcat_max or 5000
         local count = vim.api.nvim_buf_line_count(buf)
         if count > max + 100 then
@@ -124,6 +55,61 @@ local function start_logcat(buf, filter)
       M.job_id = nil
     end,
   })
+end
+
+function M.open(filter)
+  local ok, err = pcall(function()
+    if M.running then
+      vim.notify("[anvim] Logcat already running in buffer " .. M.buf, vim.log.levels.WARN)
+      return
+    end
+
+    filter = filter or "I"
+    local buf = vim.api.nvim_create_buf(false, true)
+    M.buf = buf
+
+    local win = vim.api.nvim_open_win(buf, true, {
+      relative = "editor", width = math.floor(vim.o.columns * 0.9),
+      height = math.floor(vim.o.lines * 0.7), col = math.floor(vim.o.columns * 0.05),
+      row = math.floor(vim.o.lines * 0.1), style = "minimal", border = "rounded",
+    })
+
+    vim.api.nvim_buf_set_name(buf, "anvim://logcat")
+    vim.api.nvim_buf_set_option(buf, "bufhidden", "wipe")
+    vim.api.nvim_buf_set_option(buf, "filetype", "logcat")
+    vim.api.nvim_buf_set_option(buf, "modifiable", true)
+    vim.api.nvim_win_set_option(win, "wrap", false)
+
+    vim.keymap.set("n", "q", "<cmd>bdelete!<CR>", { buffer = buf, nowait = true, silent = true, desc = "Close logcat" })
+    vim.keymap.set("n", "<Esc>", "<cmd>bdelete!<CR>", { buffer = buf, nowait = true, silent = true, desc = "Close logcat" })
+    for k, _ in pairs(levels) do
+      local level_key = k
+      vim.keymap.set("n", k, function() M.restart(level_key) end,
+        { buffer = buf, nowait = true, silent = true, desc = "Filter " .. levels[k] })
+    end
+    vim.keymap.set("n", "/", "/", { buffer = buf, nowait = true, silent = false, desc = "Search" })
+
+    M.running = true
+    start_logcat(buf, filter)
+    vim.notify("[anvim] Logcat opened | V/D/I/W/E/F filter, / search, q quit", vim.log.levels.INFO)
+  end)
+  if not ok then
+    vim.notify("[anvim] ERROR buka logcat: " .. tostring(err), vim.log.levels.ERROR)
+  end
+end
+
+function M.restart(filter)
+  M.stop()
+  vim.wait(200, function() return not M.running end, 50)
+  M.open(filter)
+end
+
+function M.stop()
+  M.running = false
+  if M.job_id then
+    pcall(vim.fn.jobstop, M.job_id)
+    M.job_id = nil
+  end
 end
 
 return M
