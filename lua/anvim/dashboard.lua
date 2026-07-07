@@ -143,7 +143,7 @@ function M.open()
   render(buf, M.state.items, M.state.selected, proj, devices_m.get_active())
 
   -- Buffer-local keymaps
-  local map_opts = { nowait = true, silent = true, buffer = buf }
+  local map_opts = { nowait = true, silent = true }
   vim.api.nvim_buf_set_keymap(buf, "n", "j", "", vim.tbl_extend("force", map_opts, {
     callback = function() M.nav(1) end, desc = "Next" }))
   vim.api.nvim_buf_set_keymap(buf, "n", "k", "", vim.tbl_extend("force", map_opts, {
