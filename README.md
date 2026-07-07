@@ -1,8 +1,9 @@
 # anvim
 
 Android/Flutter Development Dashboard untuk Neovim.
-
 TUI dashboard didalam Neovim — alternatif ringan Android Studio. Terinspirasi lazygit.
+
+note: this repo still in beta version
 
 ## Fitur
 
