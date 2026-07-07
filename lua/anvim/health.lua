@@ -32,10 +32,26 @@ local checks = {
     hint = "Install Git from your package manager.",
     url = "https://git-scm.com/downloads",
   },
+  gradle = {
+    label = "Gradle",
+    cmd = "gradle",
+    required_for = { "android" },
+    hint = "Install Gradle or use the project's gradlew.",
+    url = "https://gradle.org/install",
+  },
 }
 
+local function check_tool(spec)
+  local path = vim.fn.exepath(spec.cmd)
+  if path and path ~= "" then
+    local ok, out = pcall(vim.fn.system, spec.cmd .. " --version 2>/dev/null | head -1")
+    local version = ok and out ~= "" and vim.trim(out) or ""
+    return { found = true, path = path, version = version }
+  end
+  return { found = false, path = nil, version = nil }
+end
+
 --- Run all tool checks.
---- Returns { tools = { name = { found, path, version } }, summary = { ok, warn, err } }
 function M.check_all()
   local results = {}
   local summary = { ok = 0, warn = 0, err = 0 }
@@ -94,16 +110,6 @@ function M.format_line(name, r)
     return string.format("[%s] %s found at %s", icon, label, r.path)
   end
   return string.format("[%s] %s not found — %s", icon, label, checks[name] and checks[name].hint or "")
-end
-
-local function check_tool(spec)
-  local path = vim.fn.exepath(spec.cmd)
-  if path and path ~= "" then
-    local ok, out = pcall(vim.fn.system, spec.cmd .. " --version 2>/dev/null | head -1")
-    local version = ok and out ~= "" and vim.trim(out) or ""
-    return { found = true, path = path, version = version }
-  end
-  return { found = false, path = nil, version = nil }
 end
 
 return M
