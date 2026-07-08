@@ -44,9 +44,9 @@ function M.run(project, task_name, on_done)
     local cmd = cmd_for(project, task_name)
     if not cmd then
       if project.type == "unknown" then
-        vim.notify("[anvim] Buka project Android/Flutter dulu. Task gak jalan di folder kosong.", vim.log.levels.WARN)
+        vim.notify("⚠️ Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.\nTask kaya build/clean/run cuma jalan di project yang terdeteksi.", vim.log.levels.WARN)
       else
-        vim.notify("[anvim] Task '" .. task_name .. "' gak tersedia untuk project " .. project.type, vim.log.levels.WARN)
+        vim.notify("⚠️ Task '" .. task_name .. "' gak didukung buat project " .. project.type .. ".\nCoba pake task lain dari dashboard.", vim.log.levels.WARN)
       end
       return
     end

@@ -5,8 +5,8 @@ local M = {}
 
 M.defaults = {
   dashboard = {
-    width = 0.8,
-    height = 0.8,
+    width = 0.92,
+    height = 0.88,
     border = "rounded",
   },
   health_check = {

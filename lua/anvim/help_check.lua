@@ -359,7 +359,7 @@ function M.interactive()
     local spec = TOOLS[name]
     if spec and spec.download and spec.download[OS] then
       table.insert(downloadables, name)
-      print("  [" .. #downloadables .. "] " .. spec.label .. " — " .. spec.desc)
+      print("  " .. #downloadables .. ". " .. spec.label .. " — " .. spec.desc)
     else
       print("  -  " .. spec.label .. " — " .. (spec.post_msg or "Install manual"))
     end
@@ -373,26 +373,22 @@ function M.interactive()
   end
 
   print("")
-  print("Ketik angka tool yang mau didownload (pisah koma, misal 1,2)")
-  print("Atau tekan Enter untuk skip download.")
-  vim.fn.inputsave()
-  local answer = vim.fn.input(">> ")
-  vim.fn.inputrestore()
+  print("Pilih tool yang mau didownload:")
+  local choices = {}
+  for i, name in ipairs(downloadables) do
+    table.insert(choices, TOOLS[name].label .. " — " .. TOOLS[name].desc)
+  end
+  table.insert(choices, "-- Skip, jangan download apapun")
 
-  if answer == "" then return end
-
-  local selected = {}
-  for num in answer:gmatch("%d+") do
-    local idx = tonumber(num)
-    if idx and idx >= 1 and idx <= #downloadables then
-      table.insert(selected, downloadables[idx])
-    end
+  local pick = vim.fn.inputlist(choices)
+  if pick < 1 or pick > #downloadables then
+    print("Download dibatalkan.")
+    return
   end
 
-  if #selected == 0 then return end
-
+  local selected = { downloadables[pick] }
   print("")
-  print("Download " .. table.concat(selected, ", ") .. "? (y/n) ")
+  print("Download " .. TOOLS[selected[1]].label .. "? (y/n) ")
   vim.fn.inputsave()
   local confirm = vim.fn.input(">> ")
   vim.fn.inputrestore()
@@ -402,23 +398,12 @@ function M.interactive()
     return
   end
 
-  -- download berurutan
-  local function download_next(idx)
-    if idx > #selected then
-      print("")
+  -- download
+  M.download_tool(selected[1], function(success)
+    if success then
       print("Selesai! Jangan lupa restart terminal atau source ulang rc file.")
-      return
     end
-    M.download_tool(selected[idx], function()
-      download_next(idx + 1)
-    end)
-  end
-  download_next(1)
-end
-
--- ── setup anvim check di init ──────────────────────────────
-function M.setup_check()
-  -- auto-run pas dashboard pertama x dibuka, nanti di dashboard.lua
+  end)
 end
 
 return M

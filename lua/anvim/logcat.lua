@@ -18,7 +18,6 @@ local levels = {
 
 local function start_logcat(buf, filter)
   if vim.fn.executable("adb") == 0 then
-    vim.notify("[anvim] ADB tidak ditemukan. Install ADB dulu.", vim.log.levels.ERROR)
     M.running = false
     return
   end
@@ -67,7 +66,7 @@ function M.open(filter)
 
     -- Cek adb dulu
     if vim.fn.executable("adb") == 0 then
-      vim.notify("[anvim] ADB tidak ditemukan. Install ADB dulu (coba :AnvimCheck)", vim.log.levels.ERROR)
+      vim.notify("⚠️ Fitur Logcat butuh ADB (Android Debug Bridge).\nJalankan :AnvimCheck buat cek & install otomatis.", vim.log.levels.WARN)
       return
     end
 
