@@ -147,9 +147,9 @@ function M.open()
     vim.api.nvim_buf_set_keymap(buf, "n", "<CR>", "<Cmd>lua require('anvim.dashboard').select()<CR>", { nowait = true, silent = true })
     vim.api.nvim_buf_set_keymap(buf, "n", "q", "<Cmd>lua require('anvim.dashboard').close()<CR>", { nowait = true, silent = true })
     vim.api.nvim_buf_set_keymap(buf, "n", "<Esc>", "<Cmd>lua require('anvim.dashboard').close()<CR>", { nowait = true, silent = true })
-    vim.api.nvim_buf_set_keymap(buf, "n", "c", "<Cmd>AnvimCheck<CR>", { nowait = true, silent = true })
-    vim.api.nvim_buf_set_keymap(buf, "n", "r", "<Cmd>q<CR><Cmd>AnvimRun<CR>", { nowait = true, silent = true })
-    vim.api.nvim_buf_set_keymap(buf, "n", "l", "<Cmd>AnvimLogcat<CR>", { nowait = true, silent = true })
+    vim.api.nvim_buf_set_keymap(buf, "n", "c", "<Cmd>lua require('anvim.dashboard').do_check()<CR>", { nowait = true, silent = true })
+    vim.api.nvim_buf_set_keymap(buf, "n", "r", "<Cmd>lua require('anvim.dashboard').do_run()<CR>", { nowait = true, silent = true })
+    vim.api.nvim_buf_set_keymap(buf, "n", "l", "<Cmd>lua require('anvim.dashboard').do_logcat()<CR>", { nowait = true, silent = true })
 
     M.state.proj = proj
   end)
@@ -170,22 +170,57 @@ function M.nav(dir)
   if not ok then vim.notify("[anvim] ERROR nav: " .. tostring(err), vim.log.levels.ERROR) end
 end
 
+-- ponytail: cek prereq dulu sebelum close dashboard
+local function ensure_tool(name, msg)
+  if vim.fn.executable(name) == 0 then
+    vim.notify("⚠️ " .. (msg or "Butuh " .. name .. ".\nJalankan :AnvimCheck buat cek & install otomatis."), vim.log.levels.WARN)
+    return false
+  end
+  return true
+end
+
+local function ensure_project(proj)
+  if not proj or proj.type == "unknown" then
+    vim.notify("⚠️ Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.\nTask kaya build/clean/run cuma jalan di project yang terdeteksi.", vim.log.levels.WARN)
+    return false
+  end
+  return true
+end
+
+function M.do_logcat()
+  if not ensure_tool("adb", "Fitur Logcat butuh ADB (Android Debug Bridge).\nJalankan :AnvimCheck buat cek & install otomatis.") then return end
+  M.close()
+  require("anvim.logcat").open()
+end
+
+function M.do_check()
+  M.close()
+  require("anvim.help_check").interactive()
+end
+
+function M.do_run()
+  local proj = project_m.detect()
+  if not ensure_project(proj) then return end
+  M.close()
+  tasks_m.run(proj, "run")
+end
+
 function M.select()
   local ok, err = pcall(function()
     local item = M.state.items[M.state.selected]
     if not item then return end
     if item.type == "task" then
       if item.task == "logcat" then
-        M.close()
-        require("anvim.logcat").open()
+        M.do_logcat()
       elseif item.task == "check" then
-        M.close()
-        require("anvim.help_check").interactive()
+        M.do_check()
       elseif item.task == "devices" then
         local dl = devices_m.list()
         vim.notify("[anvim] Found " .. #dl .. " device(s)", vim.log.levels.INFO)
       else
         local proj = M.state.proj or project_m.detect()
+        if not ensure_project(proj) then return end
+        M.close()
         tasks_m.run(proj, item.task)
       end
     elseif item.type == "device" then

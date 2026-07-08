@@ -64,7 +64,7 @@ end
 function M.open(filter)
   local ok, err = pcall(function()
 
-    -- Cek adb dulu
+    -- Cek adb dulu — sebelum buat buffer/win apapun
     if vim.fn.executable("adb") == 0 then
       vim.notify("⚠️ Fitur Logcat butuh ADB (Android Debug Bridge).\nJalankan :AnvimCheck buat cek & install otomatis.", vim.log.levels.WARN)
       return
