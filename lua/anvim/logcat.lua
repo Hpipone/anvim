@@ -17,6 +17,11 @@ local levels = {
 }
 
 local function start_logcat(buf, filter)
+  if vim.fn.executable("adb") == 0 then
+    vim.notify("[anvim] ADB tidak ditemukan. Install ADB dulu.", vim.log.levels.ERROR)
+    M.running = false
+    return
+  end
   local cmd = { "adb", "logcat", "-v", "color", "-s", filter and levels[filter] or "I", "*:" .. (filter or "I") }
 
   M.job_id = vim.fn.jobstart(cmd, {
@@ -59,6 +64,13 @@ end
 
 function M.open(filter)
   local ok, err = pcall(function()
+
+    -- Cek adb dulu
+    if vim.fn.executable("adb") == 0 then
+      vim.notify("[anvim] ADB tidak ditemukan. Install ADB dulu (coba :AnvimCheck)", vim.log.levels.ERROR)
+      return
+    end
+
     if M.running then
       vim.notify("[anvim] Logcat already running in buffer " .. M.buf, vim.log.levels.WARN)
       return

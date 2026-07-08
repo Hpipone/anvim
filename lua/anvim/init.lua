@@ -32,6 +32,15 @@ function M.setup(opts)
   end, { desc = "Open anvim logcat viewer" })
   if not ok_cmd3 then vim.notify("[anvim] ERROR init: gagal buat command AnvimLogcat — " .. tostring(err_cmd3), vim.log.levels.ERROR) end
 
+  local ok_cmd4, err_cmd4 = pcall(vim.api.nvim_create_user_command, "AnvimRun", function()
+    local ok2, err2 = pcall(function()
+      local p = require("anvim.project").detect()
+      require("anvim.tasks").run(p, "run")
+    end)
+    if not ok2 then vim.notify("[anvim] ERROR AnvimRun: " .. tostring(err2), vim.log.levels.ERROR) end
+  end, { desc = "Run app via anvim" })
+  if not ok_cmd4 then vim.notify("[anvim] ERROR init: gagal buat command AnvimRun — " .. tostring(err_cmd4), vim.log.levels.ERROR) end
+
   if vim.g.anvim_no_default_keymaps then
     return
   end
