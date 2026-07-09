@@ -311,15 +311,7 @@ function M.install_tool(name, on_done)
     title_pos = "center",
   })
 
-  -- ESC-only close
-  vim.api.nvim_buf_set_keymap(pw_buf, "n", "<Esc>", "", {
-    nowait = true, silent = true,
-    callback = function()
-      if not M.install_active then
-        vim.api.nvim_buf_delete(pw_buf, { force = true })
-      end
-    end,
-  })
+  require("anvim.keymaps.installation").set(pw_buf, function() return M.install_active end)
 
   -- state
   local last_bytes = 0
