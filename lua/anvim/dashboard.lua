@@ -1,132 +1,179 @@
 -- anvim: TUI dashboard — snacks.nvim style buffer
--- ponytail: real buffer, free cursor, center layout, winblend
+-- ponytail: list navigation + center layout + winblend
 
 local M = {}
-M.state = { open = false, buf = nil, win = nil, actions = {} }
+M.state = { open = false, selected = 0, items = {}, buf = nil, win = nil }
 local alert = require("anvim.status-alert")
 
 local config_m, health_m, project_m, devices_m, tasks_m
 
 local function modules()
-  local ok
+  local ok, err
   ok, config_m = pcall(require, "anvim.config")
-  if not ok then alert.error("dashboard", "config") end
+  if not ok then alert.error("dashboard", "config — " .. tostring(config_m)) end
   ok, health_m = pcall(require, "anvim.health")
-  if not ok then alert.error("dashboard", "health") end
+  if not ok then alert.error("dashboard", "health — " .. tostring(health_m)) end
   ok, project_m = pcall(require, "anvim.project")
-  if not ok then alert.error("dashboard", "project") end
+  if not ok then alert.error("dashboard", "project — " .. tostring(project_m)) end
   ok, devices_m = pcall(require, "anvim.devices")
-  if not ok then alert.error("dashboard", "devices") end
+  if not ok then alert.error("dashboard", "devices — " .. tostring(devices_m)) end
   ok, tasks_m = pcall(require, "anvim.tasks")
-  if not ok then alert.error("dashboard", "tasks") end
+  if not ok then alert.error("dashboard", "tasks — " .. tostring(tasks_m)) end
 end
 
--- ── content builder ──────────────────────────────────────
-local function centered(lines, buf_width)
-  local out = {}
-  local max_w = 0
-  for _, l in ipairs(lines) do
-    if #l > max_w then max_w = #l end
-  end
-  local pad = math.floor(math.max(0, buf_width - max_w) / 2)
-  for _, l in ipairs(lines) do
-    table.insert(out, string.rep(" ", pad) .. l)
-  end
-  return out
-end
+-- ponytail: content builder (sama kayak sebelumnya)
+local function build_items(proj, h_results, dev_list)
+  local items = {}
 
-local function build_content(proj, dev_active)
-  local lines = {}
-  local actions = {}
+  table.insert(items, { type = "header", text = " Tasks" })
+  table.insert(items, { type = "task", label = "Run App", task = "run", icon = "▶" })
+  table.insert(items, { type = "task", label = "Show Logcat", task = "logcat", icon = "■" })
+  table.insert(items, { type = "task", label = "Clean Project", task = "clean", icon = "◐" })
+  table.insert(items, { type = "task", label = "Build APK", task = "build", icon = "◆" })
 
-  -- ── logo ──
-  local logo = {
-    "        ╔═══════════════════════════╗",
-    "        ║         a n v i m         ║",
-    "        ║  Android Flutter Toolkit  ║",
-    "        ║          v0.1.0           ║",
-    "        ╚═══════════════════════════╝",
-  }
-  for _, l in ipairs(logo) do
-    table.insert(lines, l)
-  end
-
-  -- spacer
-  table.insert(lines, "")
-  table.insert(lines, "")
-
-  -- ── project & device info ──
-  local info = string.format("  Project: %s (%s)  │  Device: %s",
-    proj.name, proj.type, dev_active or "none")
-  table.insert(lines, info)
-  table.insert(lines, "")
-
-  -- ── separator ──
-  local sep = string.rep("─", 52)
-  table.insert(lines, sep)
-  table.insert(lines, "")
-
-  -- ── tasks ──
-  local task_start = #lines + 1
-  local TASKS = {
-    { label = "▶  Run App",         action = "run" },
-    { label = "■  Show Logcat",     action = "logcat" },
-    { label = "◐  Clean Project",   action = "clean" },
-    { label = "◆  Build APK",       action = "build" },
-    { label = "⚡ Check System",    action = "check" },
-    { label = "↻  Refresh Devices", action = "devices" },
-  }
-  for _, t in ipairs(TASKS) do
-    table.insert(lines, t.label)
-    actions[#lines] = t.action
-  end
-  local task_end = #lines
-
-  table.insert(lines, "")
-  table.insert(lines, sep)
-  table.insert(lines, "")
-
-  -- ── devices ──
-  local dl = devices_m.list()
-  if dl and #dl > 0 then
-    table.insert(lines, "  Devices:")
-    for _, d in ipairs(dl) do
+  local has_devices = dev_list and #dev_list > 0
+  if has_devices then
+    table.insert(items, { type = "separator", text = " Devices" })
+    for _, d in ipairs(dev_list) do
       local is_active = d.id == devices_m.get_active()
-      local icon = is_active and " ●" or " ○"
-      local lbl = string.format("%s %s (%s)", icon, d.model or "device", d.status)
-      table.insert(lines, lbl)
-      actions[#lines] = { action = "device", id = d.id }
+      local prefix = is_active and "●" or "○"
+      table.insert(items, { type = "device", label = string.format("%s %s (%s)", prefix, d.model or "device", d.status), device = d })
     end
-    table.insert(lines, "")
+    table.insert(items, { type = "task", label = "Refresh Devices", task = "devices", icon = "↻" })
   end
 
-  -- ── footer keybinds ──
-  table.insert(lines, "")
-  table.insert(lines, "  j/k  navigate  ·  Enter  select  ·  q  quit")
-  table.insert(lines, "  c  check  ·  r  run  ·  l  logcat")
+  table.insert(items, { type = "separator", text = " System" })
+  table.insert(items, { type = "task", label = "Check System Health", task = "check", icon = "⚡" })
 
-  return lines, actions, task_start, task_end
+  table.insert(items, { type = "separator", text = " Info" })
+  if h_results then
+    for name, r in pairs(h_results.tools) do
+      table.insert(items, { type = "health", tool = name, result = r })
+    end
+  end
+
+  return items
 end
 
--- ── open ─────────────────────────────────────────────────
+local function centered_line(text, buf_width)
+  local pad = math.floor(math.max(0, buf_width - #text) / 2)
+  return string.rep(" ", pad) .. text
+end
+
+local function render(buf, items, selected, proj, dev_active, width)
+  local ok, err = pcall(function()
+    local lines = {}
+    local highlights = {}
+
+    local function add(line, hl)
+      table.insert(lines, line)
+      table.insert(highlights, { line = #lines, hl = hl })
+    end
+
+    -- empty lines top padding (vert center)
+    local content_h = 5 + #items + 6 + (#items > 0 and 1 or 0)
+    local cfg = config_m.get().dashboard
+    local height = math.floor(vim.o.lines * cfg.height)
+    local vert_pad = math.floor(math.max(0, height - content_h) / 2)
+    for _ = 1, vert_pad do add("", nil) end
+
+    local empty = vim.fn.has("gui_running") == 1 and " " or " "
+
+    -- ── logo ──
+    local logo_lines = {
+      string.rep(empty, 4) .. "╔═══════════════════════════╗",
+      string.rep(empty, 4) .. "║         a n v i m         ║",
+      string.rep(empty, 4) .. "║  Android Flutter Toolkit  ║",
+      string.rep(empty, 4) .. "║          v0.1.0           ║",
+      string.rep(empty, 4) .. "╚═══════════════════════════╝",
+    }
+    for _, l in ipairs(logo_lines) do
+      add(centered_line(l, width), "Title")
+    end
+    add("", nil)
+    add("", nil)
+
+    -- info
+    local info = string.format("  Project: %s (%s)  │  Device: %s",
+      proj.name, proj.type, dev_active or "none")
+    add(centered_line(info, width), "String")
+    add("", nil)
+    add(centered_line(string.rep("─", 52), width), "NonText")
+    add("", nil)
+
+    -- items
+    local idx = 0
+    for _, item in ipairs(items) do
+      idx = idx + 1
+      local is_sel = idx == selected
+      local prefix = is_sel and " →" or "  "
+      local line_text
+      local line_hl
+
+      if item.type == "header" then
+        add("", nil)
+        line_text = centered_line(item.text, width)
+        add(line_text, "Type")
+      elseif item.type == "separator" then
+        line_text = centered_line("  " .. item.text, width)
+        add(line_text, "NonText")
+      elseif item.type == "task" then
+        line_text = centered_line(prefix .. " " .. (item.icon or " ") .. " " .. item.label, width)
+        add(line_text, is_sel and "MoreMsg" or "Normal")
+      elseif item.type == "device" then
+        line_text = centered_line(prefix .. " " .. item.label, width)
+        add(line_text, is_sel and "MoreMsg" or "Normal")
+      elseif item.type == "health" then
+        local icon = item.result.found and "✓" or "✗"
+        local hl = is_sel and "MoreMsg" or (item.result.found and "String" or "Error")
+        local txt = string.format(" %s %s", icon, health_m.format_line(item.tool, item.result))
+        line_text = centered_line(prefix .. txt, width)
+        add(line_text, hl)
+      end
+    end
+
+    add("", nil)
+    add(centered_line(string.rep("─", 52), width), "NonText")
+    add(centered_line(" j/k Navigate  Enter Select  ESC Quit  c Check  r Run  l Logcat", width), "Comment")
+
+    vim.api.nvim_buf_set_option(buf, "modifiable", true)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.api.nvim_buf_set_option(buf, "modifiable", false)
+
+    -- cursor pos
+    local cursor_line = #lines
+    for i = 1, #lines do
+      if highlights[i] and highlights[i].hl == "MoreMsg" then
+        cursor_line = i
+        break
+      end
+    end
+    vim.api.nvim_win_set_cursor(vim.fn.bufwinid(buf), { cursor_line, 0 })
+  end)
+  if not ok then
+    alert.error("render", err)
+  end
+end
+
 function M.open()
   local ok, err = pcall(function()
     modules()
+
     if M.state.open then
-      vim.api.nvim_set_current_win(M.state.win)
+      alert.info("Dashboard already open")
       return
     end
 
     local cfg = config_m.get().dashboard
-    local width = math.floor(vim.o.columns * 0.85)
-    local height = math.floor(vim.o.lines * 0.85)
+    local width = math.floor(vim.o.columns * cfg.width)
+    local height = math.floor(vim.o.lines * cfg.height)
     local col = math.floor((vim.o.columns - width) / 2)
     local row = math.floor((vim.o.lines - height) / 2)
 
     local buf = vim.api.nvim_create_buf(false, true)
     local win = vim.api.nvim_open_win(buf, true, {
       relative = "editor", width = width, height = height,
-      col = col, row = row, style = "minimal", border = cfg.border or "rounded",
+      col = col, row = row, style = "minimal", border = cfg.border,
     })
 
     vim.api.nvim_buf_set_name(buf, "anvim://dashboard")
@@ -137,75 +184,103 @@ function M.open()
     M.state.open = true
     M.state.buf = buf
     M.state.win = win
+    M.state.selected = 1
 
     local proj = project_m.detect()
-    local dev_active = devices_m.get_active()
+    local dev_list = devices_m.list()
+    local h_results = health_m.check_configured(config_m.get().health_check.tools)
 
-    local lines, actions = build_content(proj, dev_active)
-    M.state.actions = actions
+    M.state.items = build_items(proj, h_results, dev_list)
+    render(buf, M.state.items, M.state.selected, proj, devices_m.get_active(), width)
 
-    -- center line count: push content vertical center
-    local vert_pad = math.floor(math.max(0, height - #lines) / 2)
-    local padded = {}
-    for _ = 1, vert_pad do table.insert(padded, "") end
-    for _, l in ipairs(centered(lines, width)) do table.insert(padded, l) end
-    for _ = 1, vert_pad do table.insert(padded, "") end
-
-    vim.api.nvim_buf_set_option(buf, "modifiable", true)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, padded)
-    vim.api.nvim_buf_set_option(buf, "modifiable", false)
-
-    -- keymaps
     require("anvim.keymaps.dashboard").set(buf)
 
     M.state.proj = proj
-    vim.api.nvim_win_set_cursor(win, { vert_pad + 7, 0 }) -- first task
   end)
-  if not ok then alert.error("buka dashboard", err) end
-end
-
--- ── Enter handler ────────────────────────────────────────
-function M.select()
-  local buf = M.state.buf
-  if not buf or not vim.api.nvim_buf_is_valid(buf) then return end
-  local line = vim.fn.line(".")
-  local action = M.state.actions[line]
-  if not action then return end
-
-  if type(action) == "string" then
-    if action == "logcat" then
-      if vim.fn.executable("adb") == 0 then
-        alert.warn("Fitur Logcat butuh ADB.\nJalankan :AnvimCheck buat cek & install otomatis.")
-        return
-      end
-      M.close()
-      require("anvim.logcat").open()
-    elseif action == "check" then
-      M.close()
-      vim.schedule(function()
-        require("anvim.help_check").interactive()
-      end)
-    elseif action == "devices" then
-      local dl = devices_m.list()
-      alert.info("Found " .. #dl .. " device(s)")
-    elseif action == "run" or action == "clean" or action == "build" then
-      local proj = M.state.proj or project_m.detect()
-      if not proj or proj.type == "unknown" then
-        alert.warn("Buka project Android/Flutter dulu.\nTask cuma jalan di project terdeteksi.")
-        return
-      end
-      M.close()
-      tasks_m.run(proj, action)
-    end
-  elseif type(action) == "table" and action.action == "device" then
-    devices_m.set_active(action.id)
-    alert.info("Active device: " .. action.id)
-    M.close()
-    vim.schedule(function() M.open() end)
+  if not ok then
+    alert.error("buka dashboard", err)
   end
 end
 
--- ── close ────────────────────────────────────────────────
+function M.nav(dir)
+  local ok, err = pcall(function()
+    local total = #M.state.items
+    M.state.selected = M.state.selected + dir
+    if M.state.selected < 1 then M.state.selected = total end
+    if M.state.selected > total then M.state.selected = 1 end
+    local cfg = config_m.get().dashboard
+    local width = math.floor(vim.o.columns * cfg.width)
+    local proj = M.state.proj or project_m.detect()
+    render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active(), width)
+  end)
+  if not ok then alert.error("nav", err) end
+end
+
+-- ponytail: cek prereq dulu sebelum close dashboard
+local function ensure_tool(name, msg)
+  if vim.fn.executable(name) == 0 then
+    alert.warn(msg or "Butuh " .. name .. ".\nJalankan :AnvimCheck buat cek & install otomatis.")
+    return false
+  end
+  return true
+end
+
+local function ensure_project(proj)
+  if not proj or proj.type == "unknown" then
+    alert.warn("Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.\nTask kaya build/clean/run cuma jalan di project yang terdeteksi.")
+    return false
+  end
+  return true
+end
+
+function M.do_logcat()
+  if not ensure_tool("adb", "Fitur Logcat butuh ADB (Android Debug Bridge).\nJalankan :AnvimCheck buat cek & install otomatis.") then return end
+  M.close()
+  require("anvim.logcat").open()
+end
+
+function M.do_check()
+  M.close()
+  require("anvim.help_check").interactive()
+end
+
+function M.do_run()
+  local proj = project_m.detect()
+  if not ensure_project(proj) then return end
+  M.close()
+  tasks_m.run(proj, "run")
+end
+
+function M.select()
+  local ok, err = pcall(function()
+    local item = M.state.items[M.state.selected]
+    if not item then return end
+    if item.type == "task" then
+      if item.task == "logcat" then
+        M.do_logcat()
+      elseif item.task == "check" then
+        M.do_check()
+      elseif item.task == "devices" then
+        local dl = devices_m.list()
+        alert.info("Found " .. #dl .. " device(s)")
+      else
+        local proj = M.state.proj or project_m.detect()
+        if not ensure_project(proj) then return end
+        M.close()
+        tasks_m.run(proj, item.task)
+      end
+    elseif item.type == "device" then
+      devices_m.set_active(item.device.id)
+      alert.info("Active device: " .. item.device.id)
+      local proj = M.state.proj or project_m.detect()
+      local cfg = config_m.get().dashboard
+      local width = math.floor(vim.o.columns * cfg.width)
+      render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active(), width)
+    end
+  end)
+  if not ok then alert.error("select", err) end
+end
+
 function M.close()
   if M.state.buf and vim.api.nvim_buf_is_valid(M.state.buf) then
     vim.api.nvim_buf_delete(M.state.buf, { force = true })
@@ -213,7 +288,6 @@ function M.close()
   M.state.open = false
   M.state.buf = nil
   M.state.win = nil
-  M.state.actions = {}
 end
 
 return M
