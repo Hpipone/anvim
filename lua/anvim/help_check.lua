@@ -1,9 +1,11 @@
 -- anvim: help_check — auto-detect OS, cek path, download tool yg missing
--- ponytail: multi-select, progress window, auto-update PATH
+-- ponytail: multi-select, single progress bar, ESC-only close
 
 local M = {}
 M.results = {}
 M.downloading = false
+M.install_active = false
+M.phase = ""
 
 -- ── OS detection ──────────────────────────────────────────
 local function os_type()
@@ -101,13 +103,11 @@ local function find_tool(name)
   local spec = TOOLS[name]
   if not spec then return nil end
 
-  -- 1. exepath (PATH lookup, lintas OS)
   local exe = vim.fn.exepath(spec.check_paths[OS][1])
   if exe and exe ~= "" then
     return { found = true, path = exe, method = "PATH" }
   end
 
-  -- 2. common paths
   for _, p in ipairs(spec.check_paths[OS]) do
     if not p:find("*") then
       local expanded = vim.fn.expand(p)
@@ -125,7 +125,6 @@ local function find_tool(name)
     end
   end
 
-  -- 3. adb — cek ANDROID_HOME
   if name == "adb" then
     local ah = vim.env.ANDROID_HOME or vim.env.ANDROID_SDK_ROOT
     if ah then
@@ -237,28 +236,25 @@ end
 
 local BAR_WIDTH = 30
 
-local function render_progress_win(buf, label, pct, speed, eta, downloaded, total, logs)
+local function render_progress_win(buf, phase, pct, speed, eta, logs)
   pct = math.min(100, math.max(0, pct))
   local filled = math.floor(pct/100 * BAR_WIDTH)
   local empty = BAR_WIDTH - filled
   local bar = "[" .. string.rep("■", filled) .. string.rep("□", empty) .. "]"
-
   local pct_s = string.format("%5.1f%%", pct)
-  local dl_s = fmt_size(downloaded)
-  local tot_s = total > 0 and fmt_size(total) or "---"
   local spd_s = fmt_speed(speed)
   local eta_s = fmt_time(eta)
 
   local lines = {
     "",
-    "  " .. label,
+    "  " .. phase,
     "",
     "  " .. bar .. "  " .. pct_s,
-    "  Downloaded: " .. dl_s .. " / " .. tot_s,
     "  Speed: " .. spd_s .. "    ETA: " .. eta_s,
     "",
   }
-  local max_log = math.max(0, 12 - #lines)
+
+  local max_log = 20
   local start = math.max(1, #logs - max_log + 1)
   for i = start, #logs do
     table.insert(lines, "  > " .. logs[i])
@@ -269,7 +265,7 @@ local function render_progress_win(buf, label, pct, speed, eta, downloaded, tota
   vim.api.nvim_buf_set_option(buf, "modifiable", false)
 end
 
--- ── download & install with progress bar ──────────────────
+-- ── single install flow: download → extract → check → done ──
 local function get_total_size(url)
   if vim.fn.executable("curl") ~= 1 then return 0 end
   local ok, out = pcall(vim.fn.system, "curl -sIkL " .. vim.fn.shellescape(url) .. " 2>/dev/null")
@@ -278,7 +274,7 @@ local function get_total_size(url)
   return tonumber(len) or 0
 end
 
-function M.download_with_progress(name, on_done)
+function M.install_tool(name, on_done)
   local spec = TOOLS[name]
   if not spec or not spec.download then
     vim.notify("[anvim] " .. name .. " tidak support auto-download.", vim.log.levels.WARN)
@@ -297,63 +293,77 @@ function M.download_with_progress(name, on_done)
   local dest = homedir .. "/.anvim/tools/" .. name
   vim.fn.mkdir(dest, "p")
   local zip_path = dest .. "/" .. dl.file
-
-  -- cari total size
   local total = get_total_size(dl.url)
-  M.downloading = true
+
   local logs = {}
   local start_time = vim.loop.now()
+  M.install_active = true
+  M.phase = "Memulai instalasi " .. spec.label .. "..."
 
-  -- buat progress window
+  -- progress window
   local pw_buf = vim.api.nvim_create_buf(false, true)
   local pw_win = vim.api.nvim_open_win(pw_buf, true, {
-    relative = "editor", width = 56, height = 14,
-    col = math.floor((vim.o.columns - 56) / 2),
-    row = math.floor((vim.o.lines - 14) / 2),
+    relative = "editor", width = 60, height = 18,
+    col = math.floor((vim.o.columns - 60) / 2),
+    row = math.floor((vim.o.lines - 18) / 2),
     style = "minimal", border = "rounded",
-    title = " Download " .. spec.label .. " ",
+    title = " Install " .. spec.label .. " ",
     title_pos = "center",
   })
 
-  -- timer buat progress update
-  local timer = vim.loop.new_timer()
+  -- ESC-only close
+  vim.api.nvim_buf_set_keymap(pw_buf, "n", "<Esc>", "", {
+    nowait = true, silent = true,
+    callback = function()
+      if not M.install_active then
+        vim.api.nvim_buf_delete(pw_buf, { force = true })
+      end
+    end,
+  })
+
+  -- state
   local last_bytes = 0
   local last_time = start_time
   local speed = 0
-
-  local function update_win()
-    if M.downloading then
-      local info = vim.loop.fs_stat(zip_path)
-      local downloaded = info and info.size or 0
-      local now = vim.loop.now()
-      local elapsed = (now - start_time) / 1000
-
-      -- speed: smoothed over ~1s window
-      local dt = (now - last_time) / 1000
-      if dt > 0 then
-        speed = (speed * 0.7) + ((downloaded - last_bytes) / dt * 0.3)
-      end
-      last_bytes = downloaded
-      last_time = now
-
-      local pct = total > 0 and (downloaded / total * 100) or 0
-      local eta = speed > 0 and total > 0 and ((total - downloaded) / speed) or 0
-
-      render_progress_win(pw_buf, spec.label, pct, speed, eta, downloaded, total, logs)
-    end
+  local timer
+  local function stop_timer()
+    if timer then timer:stop(); timer = nil end
   end
-  timer:start(0, 200, vim.schedule_wrap(update_win))
+  local function redraw()
+    render_progress_win(pw_buf, M.phase, 0, 0, 0, logs)
+  end
+
+  timer = vim.loop.new_timer()
+  timer:start(0, 200, vim.schedule_wrap(function()
+    if not M.install_active then
+      stop_timer()
+      return
+    end
+    local info = vim.loop.fs_stat(zip_path)
+    local downloaded = info and info.size or 0
+    local now = vim.loop.now()
+    local dt = (now - last_time) / 1000
+    if dt > 0 then
+      speed = (speed * 0.7) + ((downloaded - last_bytes) / dt * 0.3)
+    end
+    last_bytes = downloaded
+    last_time = now
+    local pct = total > 0 and (downloaded / total * 100) or 0
+    local eta = speed > 0 and total > 0 and ((total - downloaded) / speed) or 0
+    render_progress_win(pw_buf, M.phase, pct, speed, eta, logs)
+  end))
 
   local function close_pw()
-    timer:stop()
-    timer = nil
-    M.downloading = false
+    stop_timer()
+    M.install_active = false
     if pw_buf and vim.api.nvim_buf_is_valid(pw_buf) then
       vim.api.nvim_buf_delete(pw_buf, { force = true })
     end
   end
 
-  -- pilih downloader
+  -- ── PHASE 1: download ──
+  M.phase = "Download " .. spec.label .. "..."
+
   local cmd
   if vim.fn.executable("curl") == 1 then
     cmd = { "curl", "-L", "-o", zip_path, dl.url }
@@ -361,121 +371,139 @@ function M.download_with_progress(name, on_done)
     cmd = { "wget", "-O", zip_path, dl.url }
   else
     table.insert(logs, "ERROR: butuh curl atau wget")
-    render_progress_win(pw_buf, spec.label, 0, 0, 0, 0, 0, logs)
-    vim.wait(1500)
+    redraw()
+    vim.wait(2000)
     close_pw()
-    vim.notify("[anvim] Butuh curl atau wget untuk download.", vim.log.levels.ERROR)
     if on_done then on_done(false) end
     return
   end
 
-  if vim.fn.executable("adb") == 0 then
-    logs[1] = "Downloading..."
-  end
-
-  render_progress_win(pw_buf, spec.label, 0, 0, 0, 0, total, logs)
+  table.insert(logs, "Mulai download dari server...")
+  redraw()
 
   vim.fn.jobstart(cmd, {
     on_exit = function(_, code)
-      M.downloading = false
+      if not M.install_active then return end
+
       if code ~= 0 then
         table.insert(logs, "Download gagal (exit " .. code .. ")")
-        render_progress_win(pw_buf, spec.label, 0, 0, 0, 0, total, logs)
+        redraw()
         vim.wait(2000)
         close_pw()
-        vim.notify("[anvim] Gagal download " .. spec.label .. " (exit " .. code .. ")", vim.log.levels.ERROR)
         if on_done then on_done(false) end
         return
       end
-      table.insert(logs, "Download selesai, ekstrak...")
-      render_progress_win(pw_buf, spec.label, 100, 0, 0, total, total, logs)
-      extract_with_log(name, zip_path, dest, dl, pw_buf, logs, function(success)
-        if success then
-          table.insert(logs, "✓ " .. spec.label .. " siap!")
-          render_progress_win(pw_buf, spec.label, 100, 0, 0, total, total, logs)
-          auto_update_path(name, dest)
-          table.insert(logs, "PATH diperbarui untuk sesi ini")
-          render_progress_win(pw_buf, spec.label, 100, 0, 0, total, total, logs)
-        else
-          table.insert(logs, "✗ Ekstraksi gagal")
-          render_progress_win(pw_buf, spec.label, 100, 0, 0, total, total, logs)
+
+      table.insert(logs, "Download selesai (" .. fmt_size(total) .. ")")
+      redraw()
+
+      -- ── PHASE 2: extract ──
+      if M.install_active then
+        M.phase = "Extract " .. spec.label .. "..."
+        table.insert(logs, "Mulai ekstrak...")
+        redraw()
+
+        local extract_cmd
+        local extract_dir = dest .. "/extracted"
+        vim.fn.mkdir(extract_dir, "p")
+
+        if zip_path:match("%.zip$") then
+          if vim.fn.executable("unzip") == 1 then
+            extract_cmd = { "unzip", "-o", zip_path, "-d", extract_dir }
+          end
+        elseif zip_path:match("%.tar%.xz$") or zip_path:match("%.tar%.gz$") or zip_path:match("%.tgz$") then
+          if vim.fn.executable("tar") == 1 then
+            extract_cmd = { "tar", "-xf", zip_path, "-C", extract_dir }
+          end
         end
-        vim.wait(2000)
-        close_pw()
-        if on_done then on_done(success) end
-      end)
+
+        if not extract_cmd then
+          table.insert(logs, "Extract manual: " .. zip_path)
+          redraw()
+          close_pw()
+          if on_done then on_done(false) end
+          return
+        end
+
+        table.insert(logs, "Menjalankan: " .. table.concat(extract_cmd, " "))
+        redraw()
+
+        vim.fn.jobstart(extract_cmd, {
+          on_exit = function(_, ecode)
+            if not M.install_active then return end
+
+            if ecode ~= 0 then
+              table.insert(logs, "Ekstrak gagal (exit " .. ecode .. ")")
+              redraw()
+              vim.wait(2000)
+              close_pw()
+              if on_done then on_done(false) end
+              return
+            end
+
+            table.insert(logs, "Ekstrak berhasil")
+            table.insert(logs, "Menyusun file...")
+
+            -- cari binary
+            local bin_name = (OS == "windows") and (name .. ".exe") or name
+            local found_path = vim.fn.glob(extract_dir .. "/**/" .. bin_name, false, true)
+            local final_path
+            if #found_path > 0 then
+              final_path = vim.fn.fnamemodify(found_path[1], ":h")
+            else
+              final_path = extract_dir
+            end
+
+            -- pindahin ke dest
+            if OS == "windows" then
+              vim.fn.system("move " .. extract_dir .. "\\* " .. dest .. "\\")
+            else
+              vim.fn.system("cp -r " .. extract_dir .. "/* " .. dest .. "/")
+            end
+            pcall(os.remove, zip_path)
+            pcall(function() vim.fn.system("rm -rf " .. extract_dir) end)
+            table.insert(logs, "Tool terinstall di: " .. dest)
+            redraw()
+
+            -- ── PHASE 3: system cek ──
+            if M.install_active then
+              M.phase = "System check..."
+              table.insert(logs, "Verifikasi instalasi...")
+              redraw()
+
+              -- update PATH
+              if not vim.env.PATH:find(dest) then
+                vim.env.PATH = dest .. ":" .. vim.env.PATH
+              end
+
+              -- re-check
+              local exe = (OS == "windows") and (name .. ".exe") or name
+              if vim.fn.executable(exe) == 1 then
+                table.insert(logs, "✓ " .. spec.label .. " siap digunakan!")
+              else
+                table.insert(logs, "⚠ " .. spec.label .. " terinstall tapi PATH perlu diatur manual")
+              end
+              redraw()
+
+              -- ── PHASE 4: selesai ──
+              M.phase = "Instalasi selesai! ✓"
+              table.insert(logs, "Tekan ESC untuk tutup")
+              stop_timer()
+
+              -- render final statis
+              render_progress_win(pw_buf, M.phase, 100, 0, 0, logs)
+              M.install_active = false
+              vim.wait(1500)
+
+              -- close window sebelum lanjut tool berikutnya
+              close_pw()
+              if on_done then on_done(true) end
+            end
+          end,
+        })
+      end
     end,
   })
-end
-
-local function extract_with_log(name, zip_path, dest, dl, pw_buf, logs, cb)
-  local extract_cmd
-  local extract_dir = dest .. "/extracted"
-
-  if zip_path:match("%.zip$") then
-    if vim.fn.executable("unzip") == 1 then
-      extract_cmd = { "unzip", "-o", zip_path, "-d", extract_dir }
-    end
-  elseif zip_path:match("%.tar%.xz$") or zip_path:match("%.tar%.gz$") or zip_path:match("%.tgz$") then
-    if vim.fn.executable("tar") == 1 then
-      extract_cmd = { "tar", "-xf", zip_path, "-C", extract_dir }
-    end
-  end
-
-  if not extract_cmd then
-    table.insert(logs, "Manual extract: " .. zip_path)
-    cb(false)
-    return
-  end
-
-  vim.fn.mkdir(extract_dir, "p")
-
-  vim.fn.jobstart(extract_cmd, {
-    on_exit = function(_, code)
-      if code ~= 0 then
-        table.insert(logs, "Ekstrak gagal (exit " .. code .. ")")
-        cb(false)
-        return
-      end
-
-      -- cari binary
-      local bin_name = (OS == "windows") and (name .. ".exe") or name
-      local found_path = vim.fn.glob(extract_dir .. "/**/" .. bin_name, false, true)
-      local final_path
-
-      if #found_path > 0 then
-        final_path = vim.fn.fnamemodify(found_path[1], ":h")
-      else
-        final_path = extract_dir
-      end
-
-      -- pindahin ke dest
-      if OS == "windows" then
-        vim.fn.system("move " .. extract_dir .. "\\* " .. dest .. "\\")
-      else
-        vim.fn.system("cp -r " .. extract_dir .. "/* " .. dest .. "/")
-      end
-      pcall(os.remove, zip_path)
-      pcall(function() vim.fn.system("rm -rf " .. extract_dir) end)
-
-      table.insert(logs, "Terinstall di: " .. dest)
-      cb(true)
-    end,
-  })
-end
-
-local function auto_update_path(name, dest)
-  -- tambahin ke PATH buat sesi ini
-  if not vim.env.PATH:find(dest) then
-    vim.env.PATH = dest .. ":" .. vim.env.PATH
-  end
-  -- re-check
-  local exe = (OS == "windows") and (name .. ".exe") or name
-  if vim.fn.executable(exe) == 1 then
-    vim.notify("[anvim] ✓ " .. name .. " siap digunakan tanpa restart!", vim.log.levels.INFO)
-  else
-    vim.notify("[anvim] " .. name .. " terinstall. Cek PATH di ~/.bashrc / ~/.zshrc", vim.log.levels.INFO)
-  end
 end
 
 -- ── interactive check + multi-select download ────────────
@@ -521,7 +549,6 @@ function M.interactive()
     return
   end
 
-  -- parse multi-select
   local picks = {}
   for s in raw:gmatch("%d+") do
     local n = tonumber(s)
@@ -539,20 +566,20 @@ function M.interactive()
   print("Download: " .. table.concat(picks, ", "))
   vim.wait(500)
 
-  -- download berurutan — pake on_done callback chain
+  -- sequential install via callback chain
   local idx = 1
-  local function download_next()
+  local function next_install()
     if idx > #picks then
       print("")
       print("🎉 Semua download selesai! Tool siap dipakai.")
       return
     end
-    M.download_with_progress(picks[idx], function()
+    M.install_tool(picks[idx], function()
       idx = idx + 1
-      download_next()
+      next_install()
     end)
   end
-  download_next()
+  next_install()
 end
 
 return M
