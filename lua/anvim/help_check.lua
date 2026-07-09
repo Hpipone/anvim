@@ -556,7 +556,15 @@ function M.interactive()
 
   print("")
   print("Download: " .. table.concat(picks, ", "))
-  vim.wait(500)
+  vim.fn.inputsave()
+  local confirm = vim.fn.input("Konfirmasi download? (y/n): ")
+  vim.fn.inputrestore()
+  print("")
+
+  if confirm:lower() ~= "y" then
+    print("Download dibatalkan.")
+    return
+  end
 
   -- sequential install via callback chain
   local idx = 1
@@ -564,6 +572,13 @@ function M.interactive()
     if idx > #picks then
       print("")
       print("🎉 Semua download selesai! Tool siap dipakai.")
+      -- kembali ke dashboard
+      local ok_dash, _ = pcall(require, "anvim.dashboard")
+      if ok_dash then
+        vim.schedule(function()
+          pcall(require("anvim.dashboard").open)
+        end)
+      end
       return
     end
     M.install_tool(picks[idx], function()
