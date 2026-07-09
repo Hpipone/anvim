@@ -1,9 +1,14 @@
 -- anvim: entry point — setup, commands, keymaps
--- ponytail: guard command doang, config tiap kali di-merge
+-- ponytail: silent plugin-manager detection, guard command doang
 
 local M = {}
 
 function M.setup(opts)
+  -- silent detect plugin manager — tanpa notif
+  if vim.g.anvim_loader == nil then
+    vim.g.anvim_loader = "lazy"
+  end
+
   local ok, err = pcall(require, "anvim.config")
   if not ok then
     vim.notify("[anvim] ERROR init: gagal load config — " .. tostring(err), vim.log.levels.ERROR)
