@@ -1,6 +1,7 @@
 -- anvim: project type detection
 
 local M = {}
+local alert = require("anvim.status-alert")
 
 local function has_file(name)
   return vim.fn.filereadable(name) == 1
@@ -13,7 +14,7 @@ function M.detect()
     return nil
   end)
   if not ok then
-    vim.notify("[anvim] ERROR project detect: " .. tostring(result), vim.log.levels.ERROR)
+    alert.error("project detect", result)
   end
   if not ok or result == nil then
     return {
@@ -39,7 +40,7 @@ function M.detect_flutter()
       end
       f:close()
     else
-      vim.notify("[anvim] ERROR project: buka pubspec.yaml gagal — " .. tostring(open_err), vim.log.levels.DEBUG)
+      alert.debug("project", "buka pubspec.yaml gagal — " .. tostring(open_err))
     end
   end
   return { type = "flutter", name = name, build_tool = "flutter", package = pkg, version = ver }
@@ -61,7 +62,7 @@ function M.detect_android()
         end
         f:close()
       else
-        vim.notify("[anvim] ERROR project: buka " .. fname .. " gagal — " .. tostring(err), vim.log.levels.DEBUG)
+        alert.debug("project", "buka " .. fname .. " gagal — " .. tostring(err))
       end
     end
   end

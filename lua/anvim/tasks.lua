@@ -3,6 +3,7 @@
 
 local M = {}
 M.state = { running = false, current = nil }
+local alert = require("anvim.status-alert")
 
 local function cmd_for(project, task_name)
   local t = project.type
@@ -33,27 +34,27 @@ end
 function M.run(project, task_name, on_done)
   local ok, err = pcall(function()
     if not project then
-      vim.notify("[anvim] ERROR tasks: project nil", vim.log.levels.ERROR)
+      alert.error("tasks", "project nil")
       return
     end
     if M.state.running then
-      vim.notify("[anvim] Task already running: " .. M.state.current, vim.log.levels.WARN)
+      alert.warn("Task already running: " .. M.state.current)
       return
     end
 
     local cmd = cmd_for(project, task_name)
     if not cmd then
       if project.type == "unknown" then
-        vim.notify("⚠️ Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.\nTask kaya build/clean/run cuma jalan di project yang terdeteksi.", vim.log.levels.WARN)
+        alert.warn("Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.\nTask kaya build/clean/run cuma jalan di project yang terdeteksi.")
       else
-        vim.notify("⚠️ Task '" .. task_name .. "' gak didukung buat project " .. project.type .. ".\nCoba pake task lain dari dashboard.", vim.log.levels.WARN)
+        alert.warn("Task '" .. task_name .. "' gak didukung buat project " .. project.type .. ".\nCoba pake task lain dari dashboard.")
       end
       return
     end
 
     M.state.running = true
     M.state.current = task_name
-    vim.notify("[anvim] Running: " .. table.concat(cmd, " "), vim.log.levels.INFO)
+    alert.info("Running: " .. table.concat(cmd, " "))
 
     local out_lines = {}
     vim.fn.jobstart(cmd, {
@@ -79,16 +80,16 @@ function M.run(project, task_name, on_done)
         local output = table.concat(out_lines, "\n")
         local ok = code == 0
         if ok then
-          vim.notify("[anvim] Task completed: " .. task_name, vim.log.levels.INFO)
+          alert.info("Task completed: " .. task_name)
         else
-          vim.notify("[anvim] Task failed (code " .. code .. "): " .. task_name, vim.log.levels.ERROR)
+          alert.error("task", "Task failed (code " .. code .. "): " .. task_name)
         end
         if on_done then on_done(output, ok, task_name) end
       end,
     })
   end)
   if not ok then
-    vim.notify("[anvim] ERROR tasks run: " .. tostring(err), vim.log.levels.ERROR)
+    alert.error("tasks run", err)
   end
 end
 

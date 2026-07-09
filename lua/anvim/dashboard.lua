@@ -3,21 +3,22 @@
 
 local M = {}
 M.state = { open = false, selected = 0, items = {} }
+local alert = require("anvim.status-alert")
 
 local config_m, health_m, project_m, devices_m, tasks_m
 
 local function modules()
   local ok, err
   ok, config_m = pcall(require, "anvim.config")
-  if not ok then vim.notify("[anvim] ERROR dashboard: config — " .. tostring(config_m), vim.log.levels.ERROR) end
+  if not ok then alert.error("dashboard", "config — " .. tostring(config_m)) end
   ok, health_m = pcall(require, "anvim.health")
-  if not ok then vim.notify("[anvim] ERROR dashboard: health — " .. tostring(health_m), vim.log.levels.ERROR) end
+  if not ok then alert.error("dashboard", "health — " .. tostring(health_m)) end
   ok, project_m = pcall(require, "anvim.project")
-  if not ok then vim.notify("[anvim] ERROR dashboard: project — " .. tostring(project_m), vim.log.levels.ERROR) end
+  if not ok then alert.error("dashboard", "project — " .. tostring(project_m)) end
   ok, devices_m = pcall(require, "anvim.devices")
-  if not ok then vim.notify("[anvim] ERROR dashboard: devices — " .. tostring(devices_m), vim.log.levels.ERROR) end
+  if not ok then alert.error("dashboard", "devices — " .. tostring(devices_m)) end
   ok, tasks_m = pcall(require, "anvim.tasks")
-  if not ok then vim.notify("[anvim] ERROR dashboard: tasks — " .. tostring(tasks_m), vim.log.levels.ERROR) end
+  if not ok then alert.error("dashboard", "tasks — " .. tostring(tasks_m)) end
 end
 
 -- ponytail: flat item list, no OOP task objects
@@ -100,7 +101,7 @@ local function render(buf, items, selected, proj, dev_active)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
   end)
   if not ok then
-    vim.notify("[anvim] ERROR render: " .. tostring(err), vim.log.levels.ERROR)
+    alert.error("render", err)
   end
 end
 
@@ -109,7 +110,7 @@ function M.open()
     modules()
 
     if M.state.open then
-      vim.notify("[anvim] Dashboard already open", vim.log.levels.INFO)
+      alert.info("Dashboard already open")
       return
     end
 
@@ -144,7 +145,7 @@ function M.open()
     M.state.proj = proj
   end)
   if not ok then
-    vim.notify("[anvim] ERROR buka dashboard: " .. tostring(err), vim.log.levels.ERROR)
+    alert.error("buka dashboard", err)
   end
 end
 
@@ -157,13 +158,13 @@ function M.nav(dir)
     local proj = M.state.proj or project_m.detect()
     render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active())
   end)
-  if not ok then vim.notify("[anvim] ERROR nav: " .. tostring(err), vim.log.levels.ERROR) end
+  if not ok then alert.error("nav", err) end
 end
 
 -- ponytail: cek prereq dulu sebelum close dashboard
 local function ensure_tool(name, msg)
   if vim.fn.executable(name) == 0 then
-    vim.notify("⚠️ " .. (msg or "Butuh " .. name .. ".\nJalankan :AnvimCheck buat cek & install otomatis."), vim.log.levels.WARN)
+    alert.warn(msg or "Butuh " .. name .. ".\nJalankan :AnvimCheck buat cek & install otomatis.")
     return false
   end
   return true
@@ -171,7 +172,7 @@ end
 
 local function ensure_project(proj)
   if not proj or proj.type == "unknown" then
-    vim.notify("⚠️ Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.\nTask kaya build/clean/run cuma jalan di project yang terdeteksi.", vim.log.levels.WARN)
+    alert.warn("Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.\nTask kaya build/clean/run cuma jalan di project yang terdeteksi.")
     return false
   end
   return true
@@ -206,7 +207,7 @@ function M.select()
         M.do_check()
       elseif item.task == "devices" then
         local dl = devices_m.list()
-        vim.notify("[anvim] Found " .. #dl .. " device(s)", vim.log.levels.INFO)
+        alert.info("Found " .. #dl .. " device(s)")
       else
         local proj = M.state.proj or project_m.detect()
         if not ensure_project(proj) then return end
@@ -215,12 +216,12 @@ function M.select()
       end
     elseif item.type == "device" then
       devices_m.set_active(item.device.id)
-      vim.notify("[anvim] Active device: " .. item.device.id, vim.log.levels.INFO)
+      alert.info("Active device: " .. item.device.id)
       local proj = M.state.proj or project_m.detect()
       render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active())
     end
   end)
-  if not ok then vim.notify("[anvim] ERROR select: " .. tostring(err), vim.log.levels.ERROR) end
+  if not ok then alert.error("select", err) end
 end
 
 function M.close()

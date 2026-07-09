@@ -6,6 +6,7 @@ M.buf = nil
 M.job_id = nil
 M.running = false
 M.timer = nil
+local alert = require("anvim.status-alert")
 
 local levels = {
   V = "VERBOSE",
@@ -51,7 +52,7 @@ local function start_logcat(buf, filter)
     end,
     on_stderr = function(_, data)
       if data and #data > 0 and data[1] ~= "" then
-        vim.notify("[anvim] logcat stderr: " .. table.concat(data, " "), vim.log.levels.WARN)
+        alert.warn("logcat stderr: " .. table.concat(data, " "))
       end
     end,
     on_exit = function()
@@ -66,12 +67,12 @@ function M.open(filter)
 
     -- Cek adb dulu — sebelum buat buffer/win apapun
     if vim.fn.executable("adb") == 0 then
-      vim.notify("⚠️ Fitur Logcat butuh ADB (Android Debug Bridge).\nJalankan :AnvimCheck buat cek & install otomatis.", vim.log.levels.WARN)
+      alert.warn("Fitur Logcat butuh ADB (Android Debug Bridge).\nJalankan :AnvimCheck buat cek & install otomatis.")
       return
     end
 
     if M.running then
-      vim.notify("[anvim] Logcat already running in buffer " .. M.buf, vim.log.levels.WARN)
+      alert.warn("Logcat already running in buffer " .. M.buf)
       return
     end
 
@@ -102,10 +103,10 @@ function M.open(filter)
 
     M.running = true
     start_logcat(buf, filter)
-    vim.notify("[anvim] Logcat opened | V/D/I/W/E/F filter, / search, q quit", vim.log.levels.INFO)
+    alert.info("Logcat opened | V/D/I/W/E/F filter, / search, q quit")
   end)
   if not ok then
-    vim.notify("[anvim] ERROR buka logcat: " .. tostring(err), vim.log.levels.ERROR)
+    alert.error("buka logcat", err)
   end
 end
 

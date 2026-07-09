@@ -1,6 +1,7 @@
 -- anvim: ADB device management
 
 local M = {}
+local alert = require("anvim.status-alert")
 
 M.state = {
   active = nil,
@@ -16,14 +17,13 @@ function M.list()
 
   local ok, out = pcall(vim.fn.system, "adb devices -l 2>/dev/null")
   if not ok or out == "" then
-    if not ok then vim.notify("[anvim] ERROR devices: adb devices gagal — " .. tostring(out), vim.log.levels.DEBUG) end
+    if not ok then alert.debug("devices", "adb devices gagal — " .. tostring(out)) end
     M.state.list = {}
     return {}
   end
 
   local devices = {}
   for line in out:gmatch("[^\r\n]+") do
-    -- Skip header/empty
     if not line:match("^List") and not line:match("^$") then
       local id = line:match("^(%S+)")
       local status = line:match("%s+(%S+)")

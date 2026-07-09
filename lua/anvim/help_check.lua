@@ -6,6 +6,7 @@ M.results = {}
 M.downloading = false
 M.install_active = false
 M.phase = ""
+local alert = require("anvim.status-alert")
 
 -- ── OS detection ──────────────────────────────────────────
 local function os_type()
@@ -277,22 +278,31 @@ end
 function M.install_tool(name, on_done)
   local spec = TOOLS[name]
   if not spec or not spec.download then
-    vim.notify("[anvim] " .. name .. " tidak support auto-download.", vim.log.levels.WARN)
+    alert.warn(name .. " tidak support auto-download.")
     if on_done then on_done(false) end
     return
   end
 
   local dl = spec.download[OS]
   if not dl then
-    vim.notify("[anvim] Belum ada download untuk OS " .. OS, vim.log.levels.WARN)
+    alert.warn("Belum ada download untuk OS " .. OS)
     if on_done then on_done(false) end
     return
   end
 
   local homedir = vim.fn.expand("~")
   local dest = homedir .. "/.anvim/tools/" .. name
-  vim.fn.mkdir(dest, "p")
   local zip_path = dest .. "/" .. dl.file
+
+  -- cek dupe: kalo udah terdeteksi di PATH, skip download
+  local bin_name = (OS == "windows") and (name .. ".exe") or name
+  if vim.fn.executable(bin_name) == 1 then
+    alert.info(spec.label .. " sudah terinstall, skip download")
+    if on_done then on_done(true) end
+    return
+  end
+
+  vim.fn.mkdir(dest, "p")
   local total = get_total_size(dl.url)
 
   local logs = {}
@@ -439,11 +449,13 @@ function M.install_tool(name, on_done)
             -- cari binary
             local bin_name = (OS == "windows") and (name .. ".exe") or name
             local found_path = vim.fn.glob(extract_dir .. "/**/" .. bin_name, false, true)
-            local final_path
+            local rel_path
             if #found_path > 0 then
-              final_path = vim.fn.fnamemodify(found_path[1], ":h")
+              rel_path = vim.fn.fnamemodify(found_path[1], ":h")
+              -- relative path dari extract_dir, biar dicari di dest setelah copy
+              rel_path = rel_path:sub(#extract_dir + 2)
             else
-              final_path = extract_dir
+              rel_path = ""
             end
 
             -- pindahin ke dest
@@ -455,6 +467,26 @@ function M.install_tool(name, on_done)
             pcall(os.remove, zip_path)
             pcall(function() vim.fn.system("rm -rf " .. extract_dir) end)
             table.insert(logs, "Tool terinstall di: " .. dest)
+
+            -- copy binary ke /usr/local/bin biar global PATH
+            if OS ~= "windows" then
+              local bin_path = dest .. "/" .. rel_path .. "/" .. bin_name
+              local target = "/usr/local/bin/" .. bin_name
+              table.insert(logs, "Copy " .. bin_name .. " ke " .. target .. " ...")
+
+              if vim.fn.filewritable("/usr/local/bin") == 1 then
+                vim.fn.system("cp " .. bin_path .. " " .. target .. " 2>/dev/null")
+              else
+                vim.fn.system("sudo cp " .. bin_path .. " " .. target .. " 2>/dev/null")
+              end
+
+              if vim.fn.executable(bin_name) == 1 then
+                table.insert(logs, "✓ " .. bin_name .. " siap di PATH global")
+              else
+                table.insert(logs, "⚠ Gagal copy ke " .. target .. ", jalanin manual:")
+                table.insert(logs, "  sudo cp " .. bin_path .. " " .. target)
+              end
+            end
             redraw()
 
             -- ── PHASE 3: system cek ──
@@ -463,9 +495,15 @@ function M.install_tool(name, on_done)
               table.insert(logs, "Verifikasi instalasi...")
               redraw()
 
-              -- update PATH
-              if not vim.env.PATH:find(dest) then
-                vim.env.PATH = dest .. ":" .. vim.env.PATH
+              -- update PATH — tambah dest + subdir binary
+              local paths_to_add = { dest }
+              if rel_path and rel_path ~= "" then
+                table.insert(paths_to_add, dest .. "/" .. rel_path)
+              end
+              for _, p in ipairs(paths_to_add) do
+                if not vim.env.PATH:find(p) then
+                  vim.env.PATH = p .. ":" .. vim.env.PATH
+                end
               end
 
               -- re-check
