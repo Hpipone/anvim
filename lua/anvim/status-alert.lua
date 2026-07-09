@@ -1,31 +1,34 @@
 -- anvim: status-alert — central notify hub
--- semua modul panggil sini, biar konsisten & gampang diubah
+-- pake nvim-notify kalo ada, fallback vim.notify
 
 local M = {}
 local LVL = vim.log.levels
 
 function M.info(msg)
-  vim.notify("[anvim] " .. msg, LVL.INFO)
+  local ok, n = pcall(require, "notify")
+  if ok then n(msg, LVL.INFO) else vim.notify(msg, LVL.INFO) end
 end
 
 function M.warn(msg)
-  vim.notify("⚠️ " .. msg, LVL.WARN)
+  local ok, n = pcall(require, "notify")
+  if ok then n("⚠️ " .. msg, LVL.WARN) else vim.notify("⚠️ " .. msg, LVL.WARN) end
 end
 
 function M.error(mod, msg)
-  vim.notify("[anvim] ERROR " .. mod .. ": " .. tostring(msg), LVL.ERROR)
+  local s = "[anvim] ERROR " .. mod .. ": " .. tostring(msg)
+  local ok, n = pcall(require, "notify")
+  if ok then n(s, LVL.ERROR) else vim.notify(s, LVL.ERROR) end
 end
 
 function M.debug(mod, msg)
-  vim.notify("[anvim] " .. mod .. ": " .. tostring(msg), LVL.DEBUG)
+  local s = "[anvim] " .. mod .. ": " .. tostring(msg)
+  local ok, n = pcall(require, "notify")
+  if ok then n(s, LVL.DEBUG) else vim.notify(s, LVL.DEBUG) end
 end
 
-function M.ok(mod, msg)
-  vim.notify("[anvim] ✓ " .. mod .. ": " .. msg, LVL.INFO)
-end
-
-function M.fail(mod, msg)
-  vim.notify("[anvim] ✗ " .. mod .. ": " .. msg, LVL.ERROR)
+function M.ok(msg)
+  local ok, n = pcall(require, "notify")
+  if ok then n("✓ " .. msg, LVL.INFO) else vim.notify("✓ " .. msg, LVL.INFO) end
 end
 
 return M
