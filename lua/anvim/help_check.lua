@@ -5,7 +5,9 @@ local M = {}
 M.results = {}
 M.downloading = false
 M.install_active = false
+M.install_cancelled = false
 M.phase = ""
+M.install_state = {}
 local alert = require("anvim.status-alert")
 
 -- ── OS detection ──────────────────────────────────────────
@@ -468,23 +470,24 @@ function M.install_tool(name, on_done)
             pcall(function() vim.fn.system("rm -rf " .. extract_dir) end)
             table.insert(logs, "Tool terinstall di: " .. dest)
 
-            -- copy binary ke /usr/local/bin biar global PATH
+            -- mv binary ke /usr/bin/ biar global PATH
             if OS ~= "windows" then
               local bin_path = dest .. "/" .. rel_path .. "/" .. bin_name
-              local target = "/usr/local/bin/" .. bin_name
-              table.insert(logs, "Copy " .. bin_name .. " ke " .. target .. " ...")
+              local target = "/usr/bin/" .. bin_name
+              table.insert(logs, "Move " .. bin_name .. " ke " .. target .. " ...")
 
-              if vim.fn.filewritable("/usr/local/bin") == 1 then
-                vim.fn.system("cp " .. bin_path .. " " .. target .. " 2>/dev/null")
+              local _, mv_exit = pcall(vim.fn.system, "mv " .. bin_path .. " " .. target .. " 2>/dev/null; echo __EXIT__:$?")
+              if mv_exit and mv_exit:match("__EXIT__:0") then
+                -- mv ok
               else
-                vim.fn.system("sudo cp " .. bin_path .. " " .. target .. " 2>/dev/null")
+                vim.fn.system("sudo mv " .. bin_path .. " " .. target .. " 2>/dev/null")
               end
 
               if vim.fn.executable(bin_name) == 1 then
-                table.insert(logs, "✓ " .. bin_name .. " siap di PATH global")
+                table.insert(logs, "✓ " .. bin_name .. " siap di /usr/bin/")
               else
-                table.insert(logs, "⚠ Gagal copy ke " .. target .. ", jalanin manual:")
-                table.insert(logs, "  sudo cp " .. bin_path .. " " .. target)
+                table.insert(logs, "⚠ Gagal mv ke " .. target .. ", jalanin manual:")
+                table.insert(logs, "  sudo mv " .. bin_path .. " " .. target)
               end
             end
             redraw()
@@ -605,18 +608,24 @@ function M.interactive()
   end
 
   -- sequential install via callback chain
+  M.install_cancelled = false
   local idx = 1
   local function next_install()
+    if M.install_cancelled then
+      M.install_cancelled = false
+      -- reopen dashboard
+      vim.schedule(function()
+        pcall(require("anvim.dashboard").open)
+      end)
+      return
+    end
     if idx > #picks then
       print("")
       print("🎉 Semua download selesai! Tool siap dipakai.")
       -- kembali ke dashboard
-      local ok_dash, _ = pcall(require, "anvim.dashboard")
-      if ok_dash then
-        vim.schedule(function()
-          pcall(require("anvim.dashboard").open)
-        end)
-      end
+      vim.schedule(function()
+        pcall(require("anvim.dashboard").open)
+      end)
       return
     end
     M.install_tool(picks[idx], function()

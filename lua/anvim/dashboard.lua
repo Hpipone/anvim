@@ -56,7 +56,8 @@ local function build_items(proj, h_results, dev_list)
 end
 
 local function centered_line(text, buf_width)
-  local pad = math.floor(math.max(0, buf_width - #text) / 2)
+  local display_width = vim.fn.strdisplaywidth(text)
+  local pad = math.floor(math.max(0, buf_width - display_width) / 2)
   return string.rep(" ", pad) .. text
 end
 
