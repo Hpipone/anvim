@@ -27,9 +27,9 @@ function M.setup(opts)
   if not ok_cmd1 then alert.error("init", "gagal buat command Anvim — " .. tostring(err_cmd1)) end
 
   local ok_cmd2, err_cmd2 = pcall(vim.api.nvim_create_user_command, "AnvimCheck", function()
-    local ok2, err2 = pcall(function() require("anvim.help_check").interactive() end)
+    local ok2, err2 = pcall(function() require("anvim.system_check").interactive() end)
     if not ok2 then alert.error("AnvimCheck", err2) end
-  end, { desc = "Run anvim system health check + auto-download" })
+  end, { desc = "Check system tools + auto-download" })
   if not ok_cmd2 then alert.error("init", "gagal buat command AnvimCheck — " .. tostring(err_cmd2)) end
 
   local ok_cmd3, err_cmd3 = pcall(vim.api.nvim_create_user_command, "AnvimLogcat", function()
