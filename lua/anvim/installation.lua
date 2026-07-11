@@ -36,19 +36,24 @@ end
 
 local BAR_W = 30
 
-local function render_progress(buf, phase, pct, speed, eta, logs)
-  pct = math.min(100, math.max(0, pct))
-  local filled = math.floor(pct/100 * BAR_W)
-  local empty = BAR_W - filled
-  local bar = "[" .. string.rep("■", filled) .. string.rep("□", empty) .. "]"
-  local lines = {
-    "",
-    "  " .. phase,
-    "",
-    "  " .. bar .. "  " .. string.format("%5.1f%%", pct),
-    "  Speed: " .. fmt_speed(speed) .. "    ETA: " .. fmt_time(eta),
-    "",
-  }
+local function render_progress(buf, phase, downloaded, total, speed, logs)
+  local lines = { "", "  " .. phase, "" }
+  if total > 0 then
+    local pct = math.min(100, downloaded / total * 100)
+    local filled = math.floor(pct/100 * BAR_W)
+    local bar = "[" .. string.rep("■", filled) .. string.rep("□", BAR_W-filled) .. "]"
+    local eta = speed > 0 and ((total - downloaded) / speed) or 0
+    local eta_s = eta > 0 and string.format("%02d:%02d:%02d", math.floor(eta/3600), math.floor((eta%3600)/60), math.floor(eta%60)) or "--:--:--"
+    table.insert(lines, "  " .. bar .. "  " .. string.format("%5.1f%%", pct))
+    table.insert(lines, "  Downloaded: " .. fmt_size(downloaded) .. " / " .. fmt_size(total) .. "  Speed: " .. fmt_speed(speed) .. "  ETA: " .. eta_s)
+  else
+    -- indeterminate: spinner + bytes only
+    local spinners = { "|", "/", "-", "\\" }
+    local s = spinners[math.floor(vim.loop.now()/200) % 4 + 1] or "|"
+    table.insert(lines, "  " .. s .. " Downloading... " .. fmt_size(downloaded))
+    table.insert(lines, "  Speed: " .. fmt_speed(speed) .. "    Size: unknown")
+  end
+  table.insert(lines, "")
   local start = math.max(1, #logs - 20 + 1)
   for i = start, #logs do
     table.insert(lines, "  > " .. logs[i])
@@ -59,11 +64,23 @@ local function render_progress(buf, phase, pct, speed, eta, logs)
 end
 
 local function get_total_size(url)
-  if vim.fn.executable("curl") ~= 1 then return 0 end
-  local ok, out = pcall(vim.fn.system, "curl -sIkL " .. vim.fn.shellescape(url) .. " 2>/dev/null")
-  if not ok then return 0 end
-  local len = out:match("[Cc]ontent-[Ll]ength:%s*(%d+)")
-  return tonumber(len) or 0
+  -- try HEAD first
+  if vim.fn.executable("curl") == 1 then
+    local ok, out = pcall(vim.fn.system, "curl -sIkL " .. vim.fn.shellescape(url) .. " 2>/dev/null | grep -i content-length | tail -1")
+    if ok then
+      local len = out:match("(%d+)")
+      if len and tonumber(len) > 0 then return tonumber(len) end
+    end
+  end
+  -- wget fallback
+  if vim.fn.executable("wget") == 1 then
+    local ok, out = pcall(vim.fn.system, "wget --spider --server-response " .. vim.fn.shellescape(url) .. " 2>&1 | grep -i content-length | tail -1")
+    if ok then
+      local len = out:match("(%d+)")
+      if len and tonumber(len) > 0 then return tonumber(len) end
+    end
+  end
+  return 0
 end
 
 local function open_progress_win(name)
@@ -110,7 +127,9 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
   end
 
   local function redraw()
-    render_progress(pw_buf, M.phase, 0, 0, 0, logs)
+    local info = vim.loop.fs_stat(zip_path)
+    local dl = info and info.size or 0
+    render_progress(pw_buf, M.phase, dl, total, speed, logs)
   end
 
   timer = vim.loop.new_timer()
@@ -125,9 +144,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
     end
     last_bytes = downloaded
     last_time = now
-    local pct = total > 0 and (downloaded / total * 100) or 0
-    local eta = speed > 0 and total > 0 and ((total - downloaded) / speed) or 0
-    render_progress(pw_buf, M.phase, pct, speed, eta, logs)
+    render_progress(pw_buf, M.phase, downloaded, total, speed, logs)
   end))
 
   local function close_pw()
@@ -277,7 +294,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
               M.phase = "✓ Install done!"
               table.insert(logs, "Press ESC to close")
               stop_timer()
-              render_progress(pw_buf, M.phase, 100, 0, 0, logs)
+              render_progress(pw_buf, M.phase, total, total, 0, logs)
               M.install_active = false
               vim.wait(1500)
               close_pw()
