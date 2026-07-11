@@ -256,7 +256,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
               table.insert(logs, "Verifying install...")
               redraw()
 
-              local paths = { dest }
+              local paths = { "/usr/bin", dest }
               if rel_path and rel_path ~= "" then
                 table.insert(paths, dest .. "/" .. rel_path)
               end
