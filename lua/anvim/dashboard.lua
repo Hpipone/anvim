@@ -143,8 +143,8 @@ function M.open()
       return
     end
 
-    local height = 72
-    local width = 240
+    local height = 42
+    local width = 140
     local col = math.floor((vim.o.columns - width) / 2)
     local row = math.floor((vim.o.lines - height) / 2)
 
