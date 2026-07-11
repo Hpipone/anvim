@@ -143,15 +143,15 @@ function M.open()
       return
     end
 
-    local height = 36
-    local width = 120
+    local height = 72
+    local width = 240
     local col = math.floor((vim.o.columns - width) / 2)
     local row = math.floor((vim.o.lines - height) / 2)
 
     local buf = vim.api.nvim_create_buf(false, true)
     local win = vim.api.nvim_open_win(buf, true, {
       relative = "editor", width = width, height = height,
-      col = col, row = row, style = "minimal", border = "double",
+      col = col, row = row, style = "minimal", border = "single",
     })
 
     vim.api.nvim_buf_set_name(buf, "anvim://dashboard")
