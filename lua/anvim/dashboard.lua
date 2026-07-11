@@ -1,11 +1,11 @@
--- anvim: TUI dashboard — bootstrap-style, fixed 120×36
--- ponytail: index nav + centered content + single border
+-- anvim: TUI dashboard — large centered buffer
+-- ponytail: index nav + fully centered content + single border
 
 local M = {}
 M.state = { open = false, selected = 0, items = {}, buf = nil, win = nil }
 local alert = require("anvim.status-alert")
 
-local config_m, health_m, project_m, devices_m, tasks_m, system_m
+local config_m, health_m, project_m, devices_m, tasks_m
 
 local function lazy_modules()
   local ok
@@ -55,39 +55,32 @@ local function center(text, w)
   return string.rep(" ", math.floor(math.max(0, w - dw) / 2)) .. text
 end
 
--- ── render ──
-local W = 120
-
-local function render(buf, items, selected, proj, dev_active)
+-- ── render: content centered vertically & horizontally ──
+local function render(buf, items, selected, proj, dev_active, height, width)
   local ok, err = pcall(function()
-    local lines = {}
+    -- build content list (no padding yet)
+    local content = {}
     local cur_sel_line = nil
 
     local function add(l)
-      table.insert(lines, l)
+      table.insert(content, l)
     end
 
-    -- vertical padding
-    for _ = 1, 3 do add("") end
-
-    -- ── logo / title ──
-    add(center("┌─────────────────────────────────────┐", W))
-    add(center("│                                     │", W))
-    add(center("│           a n v i m                 │", W))
-    add(center("│      Android / Flutter Toolkit      │", W))
-    add(center("│              v0.1.0                  │", W))
-    add(center("│                                     │", W))
-    add(center("└─────────────────────────────────────┘", W))
+    add(center("┌─────────────────────────────────────┐", width))
+    add(center("│                                     │", width))
+    add(center("│             a n v i m               │", width))
+    add(center("│       Android / Flutter Toolkit     │", width))
+    add(center("│              v0.1.2                 │", width))
+    add(center("│                                     │", width))
+    add(center("└─────────────────────────────────────┘", width))
     add("")
 
-    -- ── project + device bar ──
     local info = string.format("  Project: %s (%s)  │  Device: %s",
       proj.name, proj.type, dev_active or "none")
-    add(center(info, W))
-    add(center(string.rep("─", 60), W))
+    add(center(info, width))
+    add(center(string.rep("─", 60), width))
     add("")
 
-    -- ── items ──
     local idx = 0
     for _, item in ipairs(items) do
       idx = idx + 1
@@ -96,36 +89,41 @@ local function render(buf, items, selected, proj, dev_active)
 
       if item.type == "header" then
         add("")
-        add(center("  " .. item.text, W))
+        add(center("  " .. item.text, width))
       elseif item.type == "task" then
         local txt = prefix .. (item.icon or " ") .. "  " .. item.label
-        add(center(txt, W))
-        if is_sel then cur_sel_line = #lines end
+        add(center(txt, width))
+        if is_sel then cur_sel_line = #content end
       elseif item.type == "device" then
         local txt = prefix .. item.label
-        add(center(txt, W))
-        if is_sel then cur_sel_line = #lines end
+        add(center(txt, width))
+        if is_sel then cur_sel_line = #content end
       elseif item.type == "health" then
         local icon = item.result.found and "✓" or "✗"
         local loc = item.result.found and item.result.path or ""
         local txt = prefix .. icon .. "  " .. (item.result.label or item.tool) .. " — " .. loc
-        add(center(txt, W))
-        if is_sel then cur_sel_line = #lines end
+        add(center(txt, width))
+        if is_sel then cur_sel_line = #content end
       end
     end
 
     add("")
-    add(center(string.rep("─", 60), W))
-    add(center("j/k Navigate  Enter Select  ESC Quit  c Check  r Run  l Logcat", W))
+    add(center(string.rep("─", 60), width))
+    add(center("j/k Navigate  Enter Select  ESC Quit  c Check  r Run  l Logcat", width))
 
-    -- apply
+    -- vertical padding: center content in buffer
+    local vert_pad = math.floor(math.max(0, height - #content) / 2)
+    local lines = {}
+    for _ = 1, vert_pad do table.insert(lines, "") end
+    for _, l in ipairs(content) do table.insert(lines, l) end
+
     vim.api.nvim_buf_set_option(buf, "modifiable", true)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
 
     -- snap cursor
     if cur_sel_line then
-      pcall(vim.api.nvim_win_set_cursor, vim.fn.bufwinid(buf), { cur_sel_line, 2 })
+      pcall(vim.api.nvim_win_set_cursor, vim.fn.bufwinid(buf), { vert_pad + cur_sel_line, 2 })
     end
   end)
   if not ok then
@@ -169,7 +167,7 @@ function M.open()
     local h_results = health_m.check_configured(config_m.get().health_check.tools)
 
     M.state.items = build_items(proj, h_results, dev_list)
-    render(buf, M.state.items, M.state.selected, proj, devices_m.get_active())
+    render(buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
     require("anvim.keymaps.dashboard").set(buf)
     M.state.proj = proj
   end)
@@ -185,7 +183,8 @@ function M.nav(dir)
     if M.state.selected < 1 then M.state.selected = total end
     if M.state.selected > total then M.state.selected = 1 end
     local proj = M.state.proj or project_m.detect()
-    render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active())
+    local h = 42; local w = 140
+    render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active(), h, w)
   end)
   if not ok then alert.error("nav", err) end
 end
@@ -244,7 +243,8 @@ function M.select()
       devices_m.set_active(item.device.id)
       alert.info("Active: " .. item.device.id)
       local proj = M.state.proj or project_m.detect()
-      render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active())
+      local h = 42; local w = 140
+      render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active(), h, w)
     end
   end)
   if not ok then alert.error("select", err) end
