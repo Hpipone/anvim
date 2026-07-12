@@ -15,12 +15,7 @@ return function(ctx)
     mock.raw("fn.system", function() return "" end)
     mock.raw("fn.shellescape", function(s) return s end)
     mock.raw("fn.expand", function(s) return s:gsub("~", "/home/testuser") end)
-    mock.raw("fn.jobstart", function(_, opts)
-      if opts and opts.on_exit then
-        vim.schedule(function() opts.on_exit() end)
-      end
-      return 1
-    end)
+    mock.raw("fn.jobstart", function() return 1 end)  -- simulate running job
     mock.raw("fn.strftime", function() return "00:00:00" end)
     mock.raw("api.nvim_create_buf", function() return "logbuf_1" end)
     mock.raw("api.nvim_open_win", function() return "logwin_1" end)
@@ -96,6 +91,10 @@ return function(ctx)
   end)
 
   run("logcat: restart keeps history", function()
+    mock.raw("fn.executable", function(name)
+      if name == "adb" then return 1 end
+      return 0
+    end)
     lc.history = { "line1", "line2", "line3" }
     lc.win = "logwin_1"
     lc.buf = "logbuf_1"
