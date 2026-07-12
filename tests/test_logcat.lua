@@ -112,4 +112,27 @@ return function(ctx)
     assert(lc.running == false, "running should be false")
     assert(lc.job_id == nil, "job should be nil")
   end)
+
+  run("logcat: on_stdout appends to history", function()
+    local stdout_cb
+    mock.raw("fn.executable", function(name)
+      if name == "adb" then return 1 end
+      return 0
+    end)
+    mock.raw("fn.jobstart", function(_cmd, opts)
+      stdout_cb = opts.on_stdout
+      return 1
+    end)
+    lc.running = false
+    lc.buf = nil
+    lc.win = nil
+    lc.open("I")
+    assert(lc.running == true, "should be running")
+    assert(stdout_cb ~= nil, "on_stdout callback captured")
+
+    local before = #lc.history
+    stdout_cb(nil, { "test_line_1", "test_line_2" })
+    assert(#lc.history == before + 2, "history should grow by 2")
+    assert(lc.history[#lc.history] == "test_line_2", "last line matches")
+  end)
 end

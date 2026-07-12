@@ -191,7 +191,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
   end
 
   vim.fn.mkdir(dest, "p")
-  local total = get_total_size(dl_info.url)
+  local total = M.get_total_size(dl_info.url)
   local logs = {}
   local start_time = vim.loop.now()
   M.install_active = true
@@ -340,7 +340,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
             end
 
             local bin_path = tool_subdir .. "/" .. bin_name
-            local deployed, deploy_logs = deploy_binary(bin_path, bin_name, tool_subdir, logs)
+            local deployed, deploy_logs = M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
             for _, l in ipairs(deploy_logs) do
               table.insert(logs, l)
             end

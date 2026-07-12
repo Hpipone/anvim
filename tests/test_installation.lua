@@ -23,6 +23,7 @@ return function(ctx)
     mock.raw("fn.glob", function() return {} end)
     mock.raw("fn.strftime", function() return "00:00:00" end)
     mock.raw("fn.strdisplaywidth", function(s) return #s end)
+    mock.raw("fn.fnamemodify", function(p, what) return p end)
     mock.raw("fn.inputsave", function() end)
     mock.raw("fn.inputrestore", function() end)
     mock.raw("fn.input", function() return "" end)
@@ -55,6 +56,7 @@ return function(ctx)
     mock.raw("bo", {})
     mock.raw("wo", {})
     mock.raw("keymap.set", function() end)
+    mock.raw("wait", function() end)
   end
 
   -- ── Tests ──
@@ -194,6 +196,60 @@ return function(ctx)
     ins.install_cancelled = true
     assert(ins.install_active == false)
     assert(ins.install_cancelled == true)
+  end)
+
+  run("install_tool: download fails → on_done(false)", function()
+    base_mocks()
+    mock.raw("fn.executable", function(name)
+      if name == "adb" then return 0 end  -- not in PATH → install
+      if name == "curl" then return 1 end
+      return 0
+    end)
+    local job_cb
+    mock.raw("fn.jobstart", function(_cmd, opts)
+      job_cb = opts.on_exit
+      return 1
+    end)
+    local done_ok
+    local ins = require("anvim.installation")
+    ins.install_tool("adb",
+      { url = "https://example.com/adb.zip", file = "adb.zip", dir = "platform-tools" },
+      "ADB", "adb", function(s) done_ok = s end)
+    assert(job_cb ~= nil, "job callback captured")
+    job_cb(nil, 1)  -- download fail
+    assert(done_ok == false, "on_done(false) expected")
+  end)
+
+  run("install_tool: download ok → on_done(true)", function()
+    base_mocks()
+    local call_n = 0
+    local cbs = {}
+    mock.raw("fn.executable", function(name)
+      if name == "adb" then return 0 end
+      if name == "curl" then return 1 end
+      if name == "unzip" then return 1 end
+      return 0
+    end)
+    mock.raw("fn.jobstart", function(_cmd, opts)
+      call_n = call_n + 1
+      cbs[call_n] = opts.on_exit
+      return 1
+    end)
+    mock.raw("fn.system", function(cmd)
+      local s = tostring(cmd)
+      if s:match("mv.*/usr/bin/") then return "__X__:0" end
+      if s:match("__X__") then return "__X__:0" end
+      return ""
+    end)
+    local done_ok
+    local ins = require("anvim.installation")
+    ins.install_tool("adb",
+      { url = "https://example.com/adb.zip", file = "adb.zip", dir = "platform-tools" },
+      "ADB", "adb", function(s) done_ok = s end)
+    assert(#cbs >= 1, "job callback captured")
+    cbs[1](nil, 0)  -- download exit 0 → triggers extract jobstart
+    cbs[2](nil, 0)  -- extract exit 0 → deploy → verify
+    assert(done_ok == true, "on_done(true) expected")
   end)
 
   run("render_progress: module loads", function()

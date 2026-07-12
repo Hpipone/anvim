@@ -155,4 +155,37 @@ return function(ctx)
     assert(dash.state.open == false, "dashboard should close")
     assert(system_called, "system_check.interactive should be called")
   end)
+
+  run("dashboard: select task run calls tasks.run", function()
+    -- call open() first so lazy_modules captures tasks_m
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    local tasks_called = false
+    package.loaded["anvim.tasks"] = { run = function() tasks_called = true end }
+    dash.open()
+    dash.state.selected = 1
+    dash.state.items = {
+      { type = "task", label = "Run App", task = "run", icon = "▶" },
+    }
+    dash.state.proj = { name = "test", type = "android" }
+    dash.select()
+    assert(tasks_called == true, "tasks.run should be called")
+  end)
+
+  run("dashboard: select device calls set_active", function()
+    local active_id
+    package.loaded["anvim.devices"] = {
+      list = function() return {} end,
+      get_active = function() return nil end,
+      set_active = function(id) active_id = id end,
+    }
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    dash.state.selected = 1
+    dash.state.items = {
+      { type = "device", label = "Pixel_6 (device)", device = { id = "emulator-5554" } },
+    }
+    dash.state.proj = { name = "test", type = "android" }
+    dash.select()
+    assert(active_id == "emulator-5554", "set_active should be called with device id, got " .. tostring(active_id))
+  end)
 end
