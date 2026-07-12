@@ -60,7 +60,7 @@ local function render_progress(buf, phase, downloaded, total, speed, logs)
   vim.api.nvim_buf_set_option(buf, "modifiable", false)
 end
 
-local function get_total_size(url)
+function M.get_total_size(url)
   if vim.fn.executable("curl") == 1 then
     local ok, out = pcall(vim.fn.system, "curl -sIkL " .. vim.fn.shellescape(url) .. " 2>/dev/null | grep -i content-length | tail -1")
     if ok then
@@ -129,7 +129,7 @@ end
 
 --- mv binary to /usr/bin/, fallback sudo, fallback PATH injection
 --- returns (success, log_lines)
-local function deploy_binary(bin_path, bin_name, tool_subdir, logs)
+function M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
   local lines = {}
   if OS == "windows" then
     -- Windows: binary stays in dest, setx PATH

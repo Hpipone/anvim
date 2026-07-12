@@ -9,6 +9,20 @@ local results = { pass = 0, fail = 0, errors = {} }
 -- Mock manager: temporarily patch vim.* paths, restore after
 local function mock_mgr()
   local saved = {}
+
+  -- init nested vim structure so mock.raw("loop.os_uname",...) works
+  if not vim.loop then vim.loop = {} end
+  if not vim.fn then vim.fn = {} end
+  if not vim.api then vim.api = {} end
+  if not vim.bo then vim.bo = setmetatable({}, { __index = function(t,k) local v={}; rawset(t,k,v); return v end }) end
+  if not vim.wo then vim.wo = setmetatable({}, { __index = function(t,k) local v={}; rawset(t,k,v); return v end }) end
+  if not vim.o then vim.o = {} end
+  if not vim.env then vim.env = {} end
+  if not vim.g then vim.g = {} end
+  if not vim.log then vim.log = {} end
+  if not vim.keymap then vim.keymap = {} end
+  if not vim._schedule_calls then vim._schedule_calls = {} end
+
   return {
     set = function(path, value)
       local obj = vim
