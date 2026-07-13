@@ -1,25 +1,82 @@
 # anvim
 
-Android/Flutter Development Dashboard untuk Neovim.
-TUI dashboard didalam Neovim — alternatif ringan Android Studio. Terinspirasi lazygit.
+**Android / Flutter Development Toolkit untuk Neovim**  
+TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygit.
 
-note: this repo still in beta version
+> **Versi 0.2.0** — Status: Beta
+
+---
 
 ## Fitur
 
-- **Dashboard** — floating TUI dengan daftar task, device management, status tool
-- **Health Check** — deteksi ADB, Java, Flutter, Git, Gradle + bisa download otomatis
-- **Task Runner** — run, clean, build APK via background job (gak ngeblock UI)
-- **Logcat Viewer** — live `adb logcat` di buffer, filter level (V/D/I/W/E/F)
-- **Device Management** — list device ADB, pilih device aktif
-- **Project Detection** — auto-detect Flutter (pubspec.yaml) vs Android (build.gradle)
+| Fitur | Status |
+|-------|--------|
+| **Dashboard** — floating window TUI navigasi task, device, status tool | ✅ Stabil |
+| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + auto-download | ✅ Stabil |
+| **Tool Installation** — download → extract → deploy (mv /usr/bin/ / sudo / PATH fallback) | ✅ Stabil |
+| **Task Runner** — run, clean, build APK via background job (non-blocking) | ✅ Stabil |
+| **Logcat Viewer** — live `adb logcat`, filter level (V/D/I/W/E/F), riwayathistory | ✅ Stabil |
+| **Device Management** — detect & select ADB device | ✅ Stabil |
+| **Project Detection** — auto-detect Flutter (pubspec.yaml) / Android (build.gradle) | ✅ Stabil |
+| **Unit Tests** — 30 test mencakup semua modul inti | ✅ Stabil |
+
+---
+
+## Perbaikan yang Dilakukan (v0.1.2 → v0.2.0)
+
+### Bug Fixes
+
+- **Dashboard centering** — teks multi-byte (`─`, `✓`, `✗`) tidak centering. Fix: `vim.fn.strdisplaywidth()` untuk hitung lebar layar aktual
+- **Blank buffer saat cancel install** — ESC di progress window malah tampilkan buffer kosong. Fix: `vim.schedule` buka dashboard kembali
+- **Progress bar tidak realtime** — Google CDN blokir `Content-Length` di HEAD request. Fix: indeterminate spinner ketika total size tidak diketahui
+- **mv ke `/usr/bin/` gagal silent** — direktori tidak writable tanpa sudo. Fix: 3-level fallback chain (`mv` → `sudo mv` → `~/.bashrc` PATH injection)
+- **Tool tidak bisa dipakai di terminal luar** — PATH hanya di session Neovim. Fix: `export PATH="$PATH:<dir>"` otomatis ke `~/.bashrc`/`~/.zshrc`
+- **Chain install berhenti setelah tool pertama** — flag `install_active` ke-reset premature. Fix: pisahkan `install_cancelled` dari `install_active`
+- **Window floating menumpuk** — `close()` hapus buffer doang, tidak tutup window. Fix: `nvim_win_close()` sebelum `nvim_buf_delete()`
+- **Call `get_total_size` & `deploy_binary` tanpa `M.` prefix** — global nil error runtime. Fix: tambah `M.` prefix
+
+### Improvements
+
+- **Extract installation logic** — dari dashboard ke modul `installation.lua` terpisah
+- **Rename help_check → system_check** — "Check System Tools" lebih human-readable
+- **Dashboard layout** — border single, padding vertikal, indeks navigation
+- **Logcat flow** — `bufhidden = "hide"` preservasi history, reopen dashboard saat close
+- **Realtime progress** — indeterminate spinner (| / - \ ) saat total size unknown
+- **Deploy 3-attempt** — `mv` → `sudo mv` → PATH injection ke shell RC
+- **30 unit tests** — mock `vim.*` API, headless Neovim test runner
+
+---
+
+## TODO (Roadmap)
+
+### Segera
+
+- [ ] **Fix `adb logcat -v color`** — ganti ke format valid (`-v time`). Format `color` tidak dikenal adb, menyebabkan logcat error
+- [ ] **Cancel install → kill background job** — `vim.fn.jobstop()` untuk hentikan curl/unzip saat ESC
+- [ ] **Ganti `vim.wait()` blocking** — freeze UI 2 detik di tiap failure path. Ganti `vim.defer_fn`
+- [ ] **System check pake floating window** — ganti `print()` ke echo area dengan buffer terpisah
+
+### Nanti
+
+- [ ] **Task runner streaming output** — `stdout_buffered = false` untuk output realtime saat build/run
+- [ ] **Health check deduplicate** — `health.lua` dan `system_check.lua` punya overlap logic
+- [ ] **Deprecated API cleanup** — `vim.loop.*` → `vim.uv.*`, `nvim_buf_set_keymap` → `vim.keymap.set`
+
+---
 
 ## Syarat
 
-- Neovim >= 0.9.0
-- ADB, Java (Android), Flutter (Flutter project) di PATH (cek pake `:AnvimCheck`)
+- **Neovim >= 0.9.0**
+- **ADB** — untuk Android Debug Bridge
+- **Java** — untuk Gradle (Android project)
+- **Flutter** — untuk Flutter project (opsional)
+- **Git** — untuk version control info
 
-## Cara Install
+Cek semua tool: `:AnvimCheck`
+
+---
+
+## Install
 
 ### lazy.nvim
 
@@ -30,7 +87,7 @@ return {
 }
 ```
 
-Atau kalo mau custom konfigurasi:
+Custom config:
 
 ```lua
 return {
@@ -53,7 +110,7 @@ return {
 }
 ```
 
-### packer.nvim / lainnya
+### packer.nvim
 
 ```lua
 use {
@@ -64,18 +121,20 @@ use {
 }
 ```
 
+---
+
 ## Cara Pakai
 
 ### 1. Cek System — `:AnvimCheck`
 
-Pertama kali, jalanin `:AnvimCheck`. Ini bakal:
+Pertama kali jalanin `:AnvimCheck`. Ini bakal:
 
-1. Deteksi OS kamu (Linux/macOS/Windows)
-2. Cari tool seperti ADB, Java, Flutter, Git, Gradle
-3. Tampilin laporan siapa yang ada dan siapa yang missing
-4. Kalo ada tool yang missing dan bisa didownload otomatis, kamu tinggal ketik angka trus enter — dia download + extract sendiri
+1. Deteksi OS (Linux/macOS/Windows)
+2. Cari tool: ADB, Java, Flutter, Git, Gradle
+3. Tampilkan laporan lengkap
+4. Tool yang bisa didownload otomatis — ketik angka, enter, dia download + extract sendiri
 
-Contoh laporan:
+Contoh:
 
 ```
 ╭───── anvim System Check ─────────────────────────────╮
@@ -84,29 +143,40 @@ Contoh laporan:
 │ ✗ Flutter   tidak ditemukan                           │
 │ ✓ Git       /usr/bin/git                              │
 ├───────────────────────────────────────────────────────┤
-│ ⚠️  1 tool belum terinstall                           │
+│ ⚠  1 tool(s) perlu install                            │
 ╰───────────────────────────────────────────────────────╯
 ```
 
-Hasil download disimpen di `~/.anvim/tools/<nama_tool>/`.
+Hasil download di `~/.anvim/tools/<nama_tool>/`.
 
 ### 2. Buka Dashboard — `:Anvim` atau `<leader>ad`
 
-Dashboard floating window. Navigasi pake `j`/`k`, enter buat milih.
+Dashboard floating window. Navigasi:
 
-Di dashboard ada:
-- **Run App** — build + install ke device
-- **Show Logcat** — buka logcat viewer
-- **Clean Project** — bersihin build artifacts
-- **Build APK** — bikin APK doang tanpa install
-- **List Devices** — refresh daftar device ADB
-- **Check System Health** — lari ke `:AnvimCheck`
+| Tombol | Fungsi |
+|--------|--------|
+| `j` / `Down` | Navigasi bawah |
+| `k` / `Up` | Navigasi atas |
+| `Enter` | Pilih item |
+| `q` / `Esc` | Tutup dashboard |
+| `c` | Cek system tools (AnvimCheck) |
+| `r` | Run app |
+| `l` | Buka logcat |
 
-Kalo ada device connected (cek `adb devices`), muncul di dashboard — tinggal pilih buat jadi device aktif.
+Item di dashboard:
 
-### 3. Logcat — `:AnvimLogcat` atau dari dashboard
+- **▶ Run App** — build + install ke device
+- **■ Show Logcat** — buka logcat viewer
+- **◐ Clean Project** — bersihin build artifacts
+- **◆ Build APK** — bikin APK doang
+- **↻ Refresh Devices** — refresh daftar device ADB
+- **⚡ Check System Tools** — lari ke `:AnvimCheck`
 
-Live logcat di buffer terpisah:
+Device terdeteksi otomatis muncul di dashboard. Pilih → Enter jadi device aktif.
+
+### 3. Logcat — dari dashboard atau `:AnvimLogcat`
+
+Live `adb logcat` di buffer terpisah. Riwayat tetap tersimpan meskipun ditutup.
 
 | Tombol | Fungsi |
 |--------|--------|
@@ -117,19 +187,24 @@ Live logcat di buffer terpisah:
 | `E` | Filter ERROR |
 | `F` | Filter FATAL |
 | `/` | Cari teks di log |
-| `q` / `Esc` | Tutup |
+| `q` / `Esc` | Tutup (kembali ke dashboard) |
 
 ### 4. Device Management
 
-Dari dashboard, device yang terdeteksi muncul otomatis. Pilih device → `Enter` → device itu jadi aktif. Semua task (Run, Build) akan pake device ini.
+Device terdeteksi muncul otomatis di dashboard. Pilih device → Enter → device aktif. Semua task (Run, Build) pakai device ini.
+
+---
 
 ## Commands
 
 | Command | Fungsi |
 |---------|--------|
 | `:Anvim` | Buka dashboard |
-| `:AnvimCheck` | Cek system + download tool kalo perlu |
+| `:AnvimCheck` | Cek system + download tool |
 | `:AnvimLogcat` | Buka logcat viewer |
+| `:AnvimRun` | Run app langsung |
+
+---
 
 ## Keymaps Default
 
@@ -138,8 +213,10 @@ Dari dashboard, device yang terdeteksi muncul otomatis. Pilih device → `Enter`
 | `<leader>ad` | Buka dashboard |
 | `<leader>al` | Buka logcat |
 
-Nonaktifin keymap default: `vim.g.anvim_no_default_keymaps = true`
+Nonaktifkan: `vim.g.anvim_no_default_keymaps = true`
 
-## License
+---
+
+## Lisensi
 
 MIT
