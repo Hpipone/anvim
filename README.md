@@ -11,29 +11,29 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 
 | Fitur | Status |
 |-------|--------|
-| **Dashboard** — floating window TUI navigasi task, device, status tool | ✅ Stabil |
-| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + auto-download | ✅ Stabil |
-| **Tool Installation** — download → extract → deploy (mv /usr/bin/ / sudo / PATH fallback) | ✅ Stabil |
-| **Task Runner** — run, clean, build APK via background job (non-blocking) | ✅ Stabil |
-| **Logcat Viewer** — live `adb logcat`, filter level (V/D/I/W/E/F), riwayathistory | ✅ Stabil |
-| **Device Management** — detect & select ADB device | ✅ Stabil |
-| **Project Detection** — auto-detect Flutter (pubspec.yaml) / Android (build.gradle) | ✅ Stabil |
-| **Unit Tests** — 30 test mencakup semua modul inti | ✅ Stabil |
+| **Dashboard** — floating window TUI navigasi task, device, status tool | \[x\] Stabil |
+| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + auto-download | \[x\] Stabil |
+| **Tool Installation** — download → extract → deploy (mv /usr/bin/ / sudo / PATH fallback) | \[x\] Stabil |
+| **Task Runner** — run, clean, build APK via background job (non-blocking) | \[x\] Stabil |
+| **Logcat Viewer** — live `adb logcat`, filter level (V/D/I/W/E/F), riwayathistory | \[x\] Stabil |
+| **Device Management** — detect & select ADB device | \[x\] Stabil |
+| **Project Detection** — auto-detect Flutter (pubspec.yaml) / Android (build.gradle) | \[x\] Stabil |
+| **Unit Tests** — 30 test mencakup semua modul inti | \[x\] Stabil |
 
 ---
 
 ## Perbaikan yang Dilakukan (v0.1.2 → v0.2.0)
 
-### Bug Fixes ✅
+### Bug Fixes
 
-- ✅ Dashboard centering — teks multi-byte tidak rata tengah
-- ✅ Blank buffer saat cancel install
-- ✅ Progress bar tidak realtime (Google CDN blokir HEAD Content-Length)
-- ✅ mv ke `/usr/bin/` gagal silent — 3-level fallback (mv → sudo mv → PATH injection)
-- ✅ Tool tidak bisa dipakai di terminal luar — persistent PATH ke shell RC
-- ✅ Chain install berhenti setelah tool pertama
-- ✅ Window floating menumpuk tiap close/open
-- ✅ `get_total_size` & `deploy_binary` global nil error (missing `M.` prefix)
+- [x] Dashboard centering — teks multi-byte tidak rata tengah
+- [x] Blank buffer saat cancel install
+- [x] Progress bar tidak realtime (Google CDN blokir HEAD Content-Length)
+- [x] mv ke `/usr/bin/` gagal silent — 3-level fallback (mv → sudo mv → PATH injection)
+- [x] Tool tidak bisa dipakai di terminal luar — persistent PATH ke shell RC
+- [x] Chain install berhenti setelah tool pertama
+- [x] Window floating menumpuk tiap close/open
+- [x] `get_total_size` & `deploy_binary` global nil error (missing `M.` prefix)
 
 ### Improvements
 
