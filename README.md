@@ -24,16 +24,16 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 
 ## Perbaikan yang Dilakukan (v0.1.2 → v0.2.0)
 
-### Bug Fixes
+### Bug Fixes ✅
 
-- **Dashboard centering** — teks multi-byte (`─`, `✓`, `✗`) tidak centering. Fix: `vim.fn.strdisplaywidth()` untuk hitung lebar layar aktual
-- **Blank buffer saat cancel install** — ESC di progress window malah tampilkan buffer kosong. Fix: `vim.schedule` buka dashboard kembali
-- **Progress bar tidak realtime** — Google CDN blokir `Content-Length` di HEAD request. Fix: indeterminate spinner ketika total size tidak diketahui
-- **mv ke `/usr/bin/` gagal silent** — direktori tidak writable tanpa sudo. Fix: 3-level fallback chain (`mv` → `sudo mv` → `~/.bashrc` PATH injection)
-- **Tool tidak bisa dipakai di terminal luar** — PATH hanya di session Neovim. Fix: `export PATH="$PATH:<dir>"` otomatis ke `~/.bashrc`/`~/.zshrc`
-- **Chain install berhenti setelah tool pertama** — flag `install_active` ke-reset premature. Fix: pisahkan `install_cancelled` dari `install_active`
-- **Window floating menumpuk** — `close()` hapus buffer doang, tidak tutup window. Fix: `nvim_win_close()` sebelum `nvim_buf_delete()`
-- **Call `get_total_size` & `deploy_binary` tanpa `M.` prefix** — global nil error runtime. Fix: tambah `M.` prefix
+- ✅ Dashboard centering — teks multi-byte tidak rata tengah
+- ✅ Blank buffer saat cancel install
+- ✅ Progress bar tidak realtime (Google CDN blokir HEAD Content-Length)
+- ✅ mv ke `/usr/bin/` gagal silent — 3-level fallback (mv → sudo mv → PATH injection)
+- ✅ Tool tidak bisa dipakai di terminal luar — persistent PATH ke shell RC
+- ✅ Chain install berhenti setelah tool pertama
+- ✅ Window floating menumpuk tiap close/open
+- ✅ `get_total_size` & `deploy_binary` global nil error (missing `M.` prefix)
 
 ### Improvements
 
