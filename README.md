@@ -11,14 +11,14 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 
 | Fitur | Status |
 |-------|--------|
-| **Dashboard** — floating window TUI navigasi task, device, status tool | \[x\] Stabil |
-| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + auto-download | \[x\] Stabil |
-| **Tool Installation** — download → extract → deploy (mv /usr/bin/ / sudo / PATH fallback) | \[x\] Stabil |
-| **Task Runner** — run, clean, build APK via background job (non-blocking) | \[x\] Stabil |
-| **Logcat Viewer** — live `adb logcat`, filter level (V/D/I/W/E/F), riwayathistory | \[x\] Stabil |
-| **Device Management** — detect & select ADB device | \[x\] Stabil |
-| **Project Detection** — auto-detect Flutter (pubspec.yaml) / Android (build.gradle) | \[x\] Stabil |
-| **Unit Tests** — 30 test mencakup semua modul inti | \[x\] Stabil |
+| **Dashboard** — floating window TUI navigasi task, device, status tool | ✅ Stabil |
+| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + auto-download | ✅ Stabil |
+| **Tool Installation** — download → extract → deploy (mv /usr/bin/ / sudo / PATH fallback) | ✅ Stabil |
+| **Task Runner** — run, clean, build APK via background job (non-blocking) | ✅ Stabil |
+| **Logcat Viewer** — live `adb logcat`, filter level (V/D/I/W/E/F), riwayathistory | ✅ Stabil |
+| **Device Management** — detect & select ADB device | ✅ Stabil |
+| **Project Detection** — auto-detect Flutter (pubspec.yaml) / Android (build.gradle) | ✅ Stabil |
+| **Unit Tests** — 30 test mencakup semua modul inti | ✅ Stabil |
 
 ---
 
