@@ -34,20 +34,23 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 - [x] Chain install berhenti setelah tool pertama
 - [x] Window floating menumpuk tiap close/open
 - [x] `get_total_size` & `deploy_binary` global nil error (missing `M.` prefix)
+- [x] `adb logcat -v color` invalid format — ganti ke `-v time`
+- [x] Cancel install tidak kill background job — `jobstop()` di ESC
+- [x] `vim.wait()` blocking UI — ganti `vim.defer_fn`
+- [x] Broken Lua pattern di `inject_path_to_rc` — dead code (grep -F fixed string)
 
 ### Improvements
 
-- **Extract installation logic** — dari dashboard ke modul `installation.lua` terpisah
-- **Rename help_check → system_check** — "Check System Tools" lebih human-readable
+- **Extract installation logic** — modul `installation.lua` terpisah
+- **Rename help_check → system_check** — "Check System Tools" human-readable
 - **Dashboard layout** — border single, padding vertikal, indeks navigation
-- **Logcat flow** — `bufhidden = "hide"` preservasi history, reopen dashboard saat close
-- **Realtime progress** — indeterminate spinner (| / - \ ) saat total size unknown
+- **Logcat flow** — history preservasi, reopen dashboard saat close
 - **Deploy 3-attempt** — `mv` → `sudo mv` → PATH injection ke shell RC
 - **30 unit tests** — mock `vim.*` API, headless Neovim test runner
 - **System check floating window** — output ke buffer, bukan `print()`
-- **Deprecated API cleanup** — `vim.loop.*` → `vim.uv.*`, `nvim_buf_set_keymap` → `vim.keymap.set`, `nvim_buf_set_option` → `vim.bo`
-- **Health check deduplicate** — dashboard pake `system_check` langsung, `health.lua` unused
-- **Task runner streaming** — `stdout_buffered = false` output realtime
+- **Deprecated API cleanup** — `vim.loop` → `vim.uv`, keymap modern API, buf_set_option → `vim.bo`
+- **Health deduplicate** — dashboard pake system_check langsung
+- **Task runner streaming** — `stdout_buffered = false`
 
 ---
 
