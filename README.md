@@ -44,23 +44,16 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 - **Realtime progress** — indeterminate spinner (| / - \ ) saat total size unknown
 - **Deploy 3-attempt** — `mv` → `sudo mv` → PATH injection ke shell RC
 - **30 unit tests** — mock `vim.*` API, headless Neovim test runner
+- **System check floating window** — output ke buffer, bukan `print()`
+- **Deprecated API cleanup** — `vim.loop.*` → `vim.uv.*`, `nvim_buf_set_keymap` → `vim.keymap.set`, `nvim_buf_set_option` → `vim.bo`
+- **Health check deduplicate** — dashboard pake `system_check` langsung, `health.lua` unused
+- **Task runner streaming** — `stdout_buffered = false` output realtime
 
 ---
 
 ## TODO (Roadmap)
 
-### Segera
-
-- [ ] **Fix `adb logcat -v color`** — ganti ke format valid (`-v time`). Format `color` tidak dikenal adb, menyebabkan logcat error
-- [ ] **Cancel install → kill background job** — `vim.fn.jobstop()` untuk hentikan curl/unzip saat ESC
-- [ ] **Ganti `vim.wait()` blocking** — freeze UI 2 detik di tiap failure path. Ganti `vim.defer_fn`
-- [ ] **System check pake floating window** — ganti `print()` ke echo area dengan buffer terpisah
-
-### Nanti
-
-- [ ] **Task runner streaming output** — `stdout_buffered = false` untuk output realtime saat build/run
-- [ ] **Health check deduplicate** — `health.lua` dan `system_check.lua` punya overlap logic
-- [ ] **Deprecated API cleanup** — `vim.loop.*` → `vim.uv.*`, `nvim_buf_set_keymap` → `vim.keymap.set`
+- Belum ada. Semua item selesai dikerjakan.
 
 ---
 
