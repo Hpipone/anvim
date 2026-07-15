@@ -59,7 +59,7 @@ function M.run(project, task_name, on_done)
     local out_lines = {}
     vim.fn.jobstart(cmd, {
       cwd = vim.fn.getcwd(),
-      stdout_buffered = true,
+      stdout_buffered = false,
       on_stdout = function(_, data)
         if data then
           for _, l in ipairs(data) do

@@ -6,12 +6,12 @@ M.results = {}
 local alert = require("anvim.status-alert")
 
 -- ── OS detection ──
-local OS = vim.loop.os_uname().sysname:lower()
+local OS = vim.uv.os_uname().sysname:lower()
 if OS:find("windows") or OS:find("win32") then OS = "windows"
 elseif OS:find("darwin") then OS = "macos"
 else OS = "linux" end
 
-local ARCH = vim.loop.os_uname().machine:lower()
+local ARCH = vim.uv.os_uname().machine:lower()
 if ARCH == "aarch64" or ARCH == "arm64" then ARCH = "arm64"
 elseif ARCH == "x86_64" or ARCH == "amd64" then ARCH = "x86_64"
 end
@@ -165,59 +165,95 @@ end
 function M.interactive()
   M.check_all()
 
-  -- print report
-  local lines = { "", "╭───── anvim System Check ─────────────────────────────╮" }
-  table.insert(lines, "│ OS: " .. string.format("%-8s", OS:upper()) .. "  Arch: " .. ARCH .. "                   │")
+  -- build report + floating window
+  local buf = vim.api.nvim_create_buf(false, true)
+  local width = 57
+  local height = math.min(#M.results + 8, 25)
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor", width = width, height = height,
+    col = math.floor((vim.o.columns - width) / 2),
+    row = math.floor((vim.o.lines - height) / 2),
+    style = "minimal", border = "rounded",
+    title = " System Check ", title_pos = "center",
+  })
+  vim.wo[win].winblend = 10
+
+  local function set_content(lines)
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.bo[buf].modifiable = false
+  end
+
+  local function close_win()
+    if win and vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
+    if buf and vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
+  end
+
+  local report = { "╭───── anvim System Check ─────────────────────────────╮" }
+  table.insert(report, "│ OS: " .. string.format("%-8s", OS:upper()) .. "  Arch: " .. ARCH .. "                   │")
   local missing = {}
   for name, r in pairs(M.results) do
     if r.found then
       local p = r.path:len() > 40 and "..." .. r.path:sub(-37) or r.path
-      table.insert(lines, "│  ✓ " .. string.format("%-10s", r.label) .. p .. string.rep(" ", 17) .. "│")
+      table.insert(report, "│  ✓ " .. string.format("%-10s", r.label) .. p .. string.rep(" ", 17) .. "│")
     else
       table.insert(missing, name)
-      table.insert(lines, "│  ✗ " .. string.format("%-10s", r.label) .. "not found" .. string.rep(" ", 17) .. "│")
+      table.insert(report, "│  ✗ " .. string.format("%-10s", r.label) .. "not found" .. string.rep(" ", 17) .. "│")
     end
   end
   if #missing == 0 then
-    table.insert(lines, "│                                                       │")
-    table.insert(lines, "│  ✅ ALL GOOD                                          │")
+    table.insert(report, "│                                                       │")
+    table.insert(report, "│  ✅ ALL GOOD                                          │")
   else
-    table.insert(lines, "├───────────────────────────────────────────────────────┤")
-    table.insert(lines, "│  ⚠ " .. #missing .. " tool(s) need install" .. string.rep(" ", 30 - #tostring(#missing)) .. "│")
+    table.insert(report, "├───────────────────────────────────────────────────────┤")
+    table.insert(report, "│  ⚠ " .. #missing .. " tool(s) need install" .. string.rep(" ", 30 - #tostring(#missing)) .. "│")
   end
-  table.insert(lines, "╰───────────────────────────────────────────────────────╯")
-  print(table.concat(lines, "\n"))
+  table.insert(report, "╰───────────────────────────────────────────────────────╯")
+  set_content(report)
 
   if #missing == 0 then
-    print("\n🎉 All tools detected.\n")
+    vim.defer_fn(function()
+      vim.notify("All tools detected", vim.log.levels.INFO)
+      close_win()
+      vim.schedule(function() pcall(require("anvim.dashboard").open) end)
+    end, 1500)
     return
   end
 
   -- list downloadable
   local dl_list = {}
-  print("")
-  print("Tools available for auto-download:")
+  vim.bo[buf].modifiable = true
+  local menu = {}
+  for _, l in ipairs(report) do table.insert(menu, l) end
+  table.insert(menu, "")
+  table.insert(menu, "  Tools available for auto-download:")
   for _, name in ipairs(missing) do
     local spec = TOOLS[name]
     if spec and spec.download and spec.download[OS] then
       table.insert(dl_list, name)
-      print("  " .. #dl_list .. ". " .. spec.label .. " — " .. spec.desc)
+      table.insert(menu, "    " .. #dl_list .. ". " .. spec.label .. " — " .. spec.desc)
     else
-      print("  -  " .. spec.label .. " — " .. (spec.post_msg or "Install manually"))
+      table.insert(menu, "    -  " .. spec.label .. " — " .. (spec.post_msg or "Install manually"))
     end
   end
+  table.insert(menu, "")
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, menu)
+  vim.bo[buf].modifiable = false
 
-  if #dl_list == 0 then print("\nAll missing tools must be installed manually.\n") return end
+  if #dl_list == 0 then
+    close_win()
+    vim.notify("All missing tools must be installed manually", vim.log.levels.WARN)
+    return
+  end
 
-  print("")
-  print("Pick tools to download (comma-separated, e.g. 1,2,3):")
+  -- prompt pake command-line input
   vim.fn.inputsave()
-  local raw = vim.fn.input(">> ")
+  local raw = vim.fn.input("Pick tools (comma-separated, e.g. 1,2,3): ")
   vim.fn.inputrestore()
 
+  close_win()
+
   if raw == "" or raw == "0" then
-    print("Cancelled.")
-    -- reopen dashboard
     vim.schedule(function() pcall(require("anvim.dashboard").open) end)
     return
   end
@@ -229,17 +265,14 @@ function M.interactive()
   end
 
   if #picks == 0 then
-    print("Invalid choice. Cancelled.")
     vim.schedule(function() pcall(require("anvim.dashboard").open) end)
     return
   end
 
-  print("Selected: " .. table.concat(picks, ", "))
   vim.fn.inputsave()
-  local confirm = vim.fn.input("Confirm download? (y/n): ")
+  local confirm = vim.fn.input("Confirm download " .. table.concat(picks, ", ") .. "? (y/n): ")
   vim.fn.inputrestore()
   if confirm:lower() ~= "y" then
-    print("Cancelled.")
     vim.schedule(function() pcall(require("anvim.dashboard").open) end)
     return
   end
@@ -256,8 +289,7 @@ function M.interactive()
       return
     end
     if idx > #picks then
-      print("")
-      print("🎉 All downloads complete! Tools ready.")
+      vim.notify("All downloads complete! Tools ready.", vim.log.levels.INFO)
       vim.schedule(function() pcall(require("anvim.dashboard").open) end)
       return
     end
@@ -270,7 +302,6 @@ function M.interactive()
     end)
   end
 
-  -- run first install synchronously in this context
   next_install()
 end
 

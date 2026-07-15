@@ -27,8 +27,6 @@ return function(ctx)
     mock.raw("g.anvim_loader", "lazy")
     mock.raw("g.anvim_loaded", 0)
     mock.raw("g.mapleader", "\\")
-    mock.raw("bo", {})
-    mock.raw("wo", {})
   end
 
   run("system_check: check_all returns results", function()

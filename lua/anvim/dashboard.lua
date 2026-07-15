@@ -5,14 +5,14 @@ local M = {}
 M.state = { open = false, selected = 0, items = {}, buf = nil, win = nil }
 local alert = require("anvim.status-alert")
 
-local config_m, health_m, project_m, devices_m, tasks_m
+local config_m, syscheck_m, project_m, devices_m, tasks_m
 
 local function lazy_modules()
   local ok
   ok, config_m = pcall(require, "anvim.config")
   if not ok then alert.error("dashboard", "config — " .. tostring(config_m)) end
-  ok, health_m = pcall(require, "anvim.health")
-  if not ok then alert.error("dashboard", "health — " .. tostring(health_m)) end
+  ok, syscheck_m = pcall(require, "anvim.system_check")
+  if not ok then alert.error("dashboard", "system_check — " .. tostring(syscheck_m)) end
   ok, project_m = pcall(require, "anvim.project")
   if not ok then alert.error("dashboard", "project — " .. tostring(project_m)) end
   ok, devices_m = pcall(require, "anvim.devices")
@@ -43,7 +43,7 @@ local function build_items(proj, h_results, dev_list)
   table.insert(items, { type = "task", label = "Check System Tools", task = "check", icon = "⚡" })
   table.insert(items, { type = "header", text = " Info" })
   if h_results then
-    for name, r in pairs(h_results.tools) do
+    for name, r in pairs(h_results) do
       table.insert(items, { type = "health", tool = name, result = r })
     end
   end
@@ -117,9 +117,9 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     for _ = 1, vert_pad do table.insert(lines, "") end
     for _, l in ipairs(content) do table.insert(lines, l) end
 
-    vim.api.nvim_buf_set_option(buf, "modifiable", true)
+    vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.api.nvim_buf_set_option(buf, "modifiable", false)
+    vim.bo[buf].modifiable = false
 
     -- snap cursor
     if cur_sel_line then
@@ -164,7 +164,7 @@ function M.open()
 
     local proj = project_m.detect()
     local dev_list = devices_m.list()
-    local h_results = health_m.check_configured(config_m.get().health_check.tools)
+    local h_results = syscheck_m.check_all(config_m.get().health_check.tools)
 
     M.state.items = build_items(proj, h_results, dev_list)
     render(buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)

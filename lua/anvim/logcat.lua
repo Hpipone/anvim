@@ -32,7 +32,7 @@ local function start_logcat(buf, filter)
         if line ~= "" then
           table.insert(M.history, line)
           if valid_buf then
-            pcall(vim.api.nvim_buf_set_option, buf, "modifiable", true)
+            pcall(function() vim.bo[buf].modifiable = true end)
             local last = vim.api.nvim_buf_line_count(buf)
             vim.api.nvim_buf_set_lines(buf, last, last, false, { line })
             local max = vim.g.anvim_logcat_max or 5000
@@ -40,7 +40,7 @@ local function start_logcat(buf, filter)
             if count > max + 100 then
               vim.api.nvim_buf_set_lines(buf, 0, count - max, false, {})
             end
-            pcall(vim.api.nvim_buf_set_option, buf, "modifiable", false)
+            pcall(function() vim.bo[buf].modifiable = false end)
           end
         end
       end
@@ -101,9 +101,9 @@ function M.open(filter)
 
       -- restore history
       if #M.history > 0 then
-        vim.api.nvim_buf_set_option(buf, "modifiable", true)
+        vim.bo[buf].modifiable = true
         vim.api.nvim_buf_set_lines(buf, 0, -1, false, M.history)
-        vim.api.nvim_buf_set_option(buf, "modifiable", false)
+        vim.bo[buf].modifiable = false
       end
     end
 
@@ -113,7 +113,7 @@ function M.open(filter)
       row = math.floor(vim.o.lines * 0.1), style = "minimal", border = "rounded",
     })
     M.win = win
-    vim.api.nvim_win_set_option(win, "wrap", false)
+    vim.wo[win].wrap = false
 
     setup_keymaps(buf)
     M.running = true

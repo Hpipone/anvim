@@ -64,14 +64,11 @@ return function(ctx)
       error = function() alert_state.error_called = true end,
       ok = function() end,
     }
-    package.loaded["anvim.health"] = {
-      check_configured = function() return {
-        tools = {
-          adb = { found = true, path = "/usr/bin/adb", label = "ADB" },
-          git = { found = true, path = "/usr/bin/git", label = "Git" },
-        }
+    package.loaded["anvim.system_check"] = {
+      check_all = function() return {
+        adb = { found = true, path = "/usr/bin/adb", label = "ADB" },
+        git = { found = true, path = "/usr/bin/git", label = "Git" },
       } end,
-      format_line = function(n, r) return r.path or "" end,
     }
     package.loaded["anvim.project"] = {
       detect = function() return { name = "test-project", type = "android" } end,

@@ -7,7 +7,7 @@ M.phase = ""
 local alert = require("anvim.status-alert")
 
 -- OS detection
-local OS = vim.loop.os_uname().sysname:lower()
+local OS = vim.uv.os_uname().sysname:lower()
 if OS:find("windows") or OS:find("win32") then OS = "windows"
 elseif OS:find("darwin") then OS = "macos"
 else OS = "linux" end
@@ -46,7 +46,7 @@ local function render_progress(buf, phase, downloaded, total, speed, logs)
     table.insert(lines, "  Downloaded: " .. fmt_size(downloaded) .. " / " .. fmt_size(total) .. "  Speed: " .. fmt_speed(speed) .. "  ETA: " .. eta_s)
   else
     local spinners = { "|", "/", "-", "\\" }
-    local s = spinners[math.floor(vim.loop.now()/200) % 4 + 1] or "|"
+    local s = spinners[math.floor(vim.uv.now()/200) % 4 + 1] or "|"
     table.insert(lines, "  " .. s .. " Downloading... " .. fmt_size(downloaded))
     table.insert(lines, "  Speed: " .. fmt_speed(speed) .. "    Size: unknown")
   end
@@ -55,9 +55,9 @@ local function render_progress(buf, phase, downloaded, total, speed, logs)
   for i = start, #logs do
     table.insert(lines, "  > " .. logs[i])
   end
-  vim.api.nvim_buf_set_option(buf, "modifiable", true)
+  vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.api.nvim_buf_set_option(buf, "modifiable", false)
+  vim.bo[buf].modifiable = false
 end
 
 function M.get_total_size(url)
@@ -107,8 +107,7 @@ local function inject_path_to_rc(export_line)
     return false, "⚠ shell RC gak dikenal, tambah PATH manual"
   end
 
-  -- escape export_line buat grep
-  local escaped = export_line:gsub("[" .. '"\'%%' .. "]", "\\%1")
+  -- grep -F = fixed string, no escape needed
   local check = vim.fn.system("grep -F " .. vim.fn.shellescape(export_line) .. " " .. rc .. " 2>/dev/null")
   if check and check ~= "" then
     return true, "✓ PATH already in " .. rc
@@ -193,7 +192,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
   vim.fn.mkdir(dest, "p")
   local total = M.get_total_size(dl_info.url)
   local logs = {}
-  local start_time = vim.loop.now()
+  local start_time = vim.uv.now()
   M.install_active = true
   M.phase = "Starting " .. label .. "..."
 
@@ -210,17 +209,17 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
   end
 
   local function redraw()
-    local info = vim.loop.fs_stat(zip_path)
+    local info = vim.uv.fs_stat(zip_path)
     local dl = info and info.size or 0
     render_progress(pw_buf, M.phase, dl, total, speed, logs)
   end
 
-  timer = vim.loop.new_timer()
+  timer = vim.uv.new_timer()
   timer:start(0, 200, vim.schedule_wrap(function()
     if not M.install_active then stop_timer(); return end
-    local info = vim.loop.fs_stat(zip_path)
+    local info = vim.uv.fs_stat(zip_path)
     local downloaded = info and info.size or 0
-    local now = vim.loop.now()
+    local now = vim.uv.now()
     local dt = (now - last_time) / 1000
     if dt > 0 then
       speed = (speed * 0.7) + ((downloaded - last_bytes) / dt * 0.3)
