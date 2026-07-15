@@ -233,6 +233,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
   local function close_pw()
     stop_timer()
     M.install_active = false
+    M.job_id = nil
     if pw_buf and vim.api.nvim_buf_is_valid(pw_buf) then
       vim.api.nvim_buf_delete(pw_buf, { force = true })
     end
@@ -247,22 +248,24 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
     cmd = { "wget", "-O", zip_path, dl_info.url }
   else
     table.insert(logs, "ERROR: need curl or wget")
-    redraw(); vim.wait(2000); close_pw()
-    if on_done then on_done(false) end
+    redraw()
+    stop_timer()
+    vim.defer_fn(function() close_pw(); if on_done then on_done(false) end end, 2000)
     return
   end
 
   table.insert(logs, "Downloading...")
   redraw()
 
-  vim.fn.jobstart(cmd, {
+  M.job_id = vim.fn.jobstart(cmd, {
     on_exit = function(_, code)
       if not M.install_active then return end
 
       if code ~= 0 then
         table.insert(logs, "Download failed (exit " .. code .. ")")
-        redraw(); vim.wait(2000); close_pw()
-        if on_done then on_done(false) end
+        redraw()
+        stop_timer()
+        vim.defer_fn(function() close_pw(); if on_done then on_done(false) end end, 2000)
         return
       end
 
@@ -299,14 +302,15 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
         table.insert(logs, "Running: " .. table.concat(extract_cmd, " "))
         redraw()
 
-        vim.fn.jobstart(extract_cmd, {
+        M.job_id = vim.fn.jobstart(extract_cmd, {
           on_exit = function(_, ecode)
             if not M.install_active then return end
 
             if ecode ~= 0 then
               table.insert(logs, "Extract failed (exit " .. ecode .. ")")
-              redraw(); vim.wait(2000); close_pw()
-              if on_done then on_done(false) end
+              redraw()
+              stop_timer()
+              vim.defer_fn(function() close_pw(); if on_done then on_done(false) end end, 2000)
               return
             end
 
@@ -374,9 +378,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
             stop_timer()
             render_progress(pw_buf, M.phase, total, total, 0, logs)
             M.install_active = false
-            vim.wait(1500)
-            close_pw()
-            if on_done then on_done(true) end
+            vim.defer_fn(function() close_pw(); if on_done then on_done(true) end end, 1500)
           end,
         })
       end

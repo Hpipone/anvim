@@ -20,7 +20,7 @@ local function start_logcat(buf, filter)
     M.running = false
     return
   end
-  local cmd = { "adb", "logcat", "-v", "color", "-s", levels[filter] or "I", "*:" .. (filter or "I") }
+  local cmd = { "adb", "logcat", "-v", "time", "-s", levels[filter] or "I", "*:" .. (filter or "I") }
 
   M.job_id = vim.fn.jobstart(cmd, {
     stdout_buffered = false,

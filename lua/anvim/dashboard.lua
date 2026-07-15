@@ -251,6 +251,9 @@ function M.select()
 end
 
 function M.close()
+  if M.state.win and vim.api.nvim_win_is_valid(M.state.win) then
+    vim.api.nvim_win_close(M.state.win, true)
+  end
   if M.state.buf and vim.api.nvim_buf_is_valid(M.state.buf) then
     vim.api.nvim_buf_delete(M.state.buf, { force = true })
   end

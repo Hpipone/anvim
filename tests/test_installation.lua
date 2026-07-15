@@ -57,6 +57,7 @@ return function(ctx)
     mock.raw("wo", {})
     mock.raw("keymap.set", function() end)
     mock.raw("wait", function() end)
+    mock.raw("defer_fn", function(fn, ms) fn() end)
   end
 
   -- ── Tests ──

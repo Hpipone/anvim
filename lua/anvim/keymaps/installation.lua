@@ -8,6 +8,7 @@ function M.set(buf)
     nowait = true, silent = true,
     callback = function()
       local ins = require("anvim.installation")
+      if ins.job_id then pcall(vim.fn.jobstop, ins.job_id); ins.job_id = nil end
       ins.install_active = false
       ins.install_cancelled = true
       if buf and vim.api.nvim_buf_is_valid(buf) then
