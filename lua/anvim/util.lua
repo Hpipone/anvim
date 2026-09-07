@@ -68,7 +68,7 @@ function M.tbl_count(t)
 end
 
 --- Urutan tool stabil (pairs acak, jadi sort eksplisit).
-M.TOOL_ORDER = { "adb", "java", "flutter", "git", "gradle", "scrcpy" }
+M.TOOL_ORDER = { "adb", "java", "flutter", "git", "gradle", "scrcpy", "node" }
 
 function M.sorted_tool_names(results)
   local names = {}

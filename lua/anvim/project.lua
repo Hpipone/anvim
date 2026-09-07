@@ -54,6 +54,9 @@ function M.detect()
     if vim.fn.filereadable("settings.gradle") == 1 or vim.fn.filereadable("build.gradle") == 1 then
       return M.detect_android(vim.fn.getcwd())
     end
+    -- project node/js (npm scripts: dev/build/test) — mis. React Native/Expo/Capacitor
+    if has_file_abs(join(r, "package.json")) then return M.detect_node(r) end
+    if vim.fn.filereadable("package.json") == 1 then return M.detect_node(vim.fn.getcwd()) end
     return nil
   end)
   if not ok then
@@ -111,6 +114,35 @@ function M.detect_android(r)
     end
   end
   return { type = "android", name = name, root = r, branch = git_branch(r), build_tool = build_tool, package = pkg, version = ver }
+end
+
+function M.detect_node(r)
+  r = r or root()
+  local name = vim.fn.fnamemodify(r, ":t")
+  local ver, scripts = nil, {}
+  local pkg_path = join(r, "package.json")
+  if has_file_abs(pkg_path) then
+    local ok, content = pcall(function()
+      local f = io.open(pkg_path, "r")
+      if not f then return nil end
+      local s = f:read("*a")
+      f:close()
+      return s
+    end)
+    if ok and content then
+      local dok, data = pcall(vim.json.decode, content)
+      if dok and type(data) == "table" then
+        if type(data.name) == "string" and data.name ~= "" then name = data.name end
+        if type(data.version) == "string" then ver = data.version end
+        if type(data.scripts) == "table" then
+          for k, v in pairs(data.scripts) do
+            if type(v) == "string" then scripts[k] = v end
+          end
+        end
+      end
+    end
+  end
+  return { type = "node", name = name, root = r, branch = git_branch(r), build_tool = "npm", package = name, version = ver, scripts = scripts }
 end
 
 return M

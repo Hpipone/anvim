@@ -7,7 +7,7 @@ local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 pcall(require, "anvim.theme")
 
-local VERSION = "v1.2.0"
+local VERSION = "v1.3.0"
 
 local config_m, syscheck_m, project_m, devices_m, tasks_m, emulator_m, flutter_m, scrcpy_m
 
@@ -89,10 +89,11 @@ end
 local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_info, show_emulators, scrcpy_hint)
   local items = {}
   table.insert(items, { type = "header", text = "Tasks" })
-  table.insert(items, { type = "task", label = "Run App", task = "run", icon = "▶" })
+  local is_node = proj and proj.type == "node"
+  table.insert(items, { type = "task", label = is_node and "Run (npm)" or "Run App", task = "run", icon = "▶" })
   table.insert(items, { type = "task", label = "Show Logcat", task = "logcat", icon = "■" })
   table.insert(items, { type = "task", label = "Clean Project", task = "clean", icon = "◐" })
-  table.insert(items, { type = "task", label = "Build APK", task = "build", icon = "◆" })
+  table.insert(items, { type = "task", label = is_node and "Build (npm)" or "Build APK", task = "build", icon = "◆" })
   table.insert(items, { type = "task", label = "Run Tests", task = "test", icon = "◈" })
   for _, c in ipairs(custom_tasks()) do
     if type(c.label) == "string" and type(c.cmd) == "table" then
@@ -280,7 +281,8 @@ local function refresh_state(slow)
   local tools = { "adb", "java", "git", "flutter", "gradle" }
   local ok_c, c = pcall(function() return require("anvim.config").get() end)
   if ok_c and c and c.health_check and c.health_check.tools then tools = c.health_check.tools end
-  local h_results = syscheck_m.check_all(tools)
+  if proj.type == "node" then table.insert(tools, "node") end
+  local h_results = syscheck_m.check_all(tools, slow and nil or { deep = false })
   -- AVD info: lambat (spawn emulator binary + adb per device) → fase slow saja
   local avd_info = {}
   if slow and emulator_m then
@@ -300,11 +302,12 @@ local function refresh_state(slow)
   if slow and flutter_m and proj.type == "flutter" then
     pcall(function() fdevs = flutter_m.list() or {} end)
   end
-  -- Scrcpy: gantikan emulator bila ada + replace_emulator (default true)
+  -- Scrcpy: gantikan emulator bila ada + replace_emulator (default true).
+  -- Tanpa device adb: SEMUA section emu+scrcpy di-hide (unhide saat ada).
   local scrcpy_info = {}
-  local show_emulators = true
+  local show_emulators = #dev_list > 0
   local scrcpy_hint = false
-  if scrcpy_m then
+  if scrcpy_m and #dev_list > 0 then
     local found = false
     pcall(function() found = scrcpy_m.find_binary() ~= nil end)
     if found then
@@ -519,7 +522,14 @@ end
 function M.do_run()
   local proj = project_m.detect()
   if not ensure_project(proj) then return end
-  if not ensure_tool(proj.build_tool == "flutter" and "flutter" or "adb", nil) then return end
+  -- tanpa wajib install: cek binary seperlunya, beri panduan bila hilang
+  if proj.build_tool == "flutter" then
+    if not ensure_tool("flutter", nil) then return end
+  elseif proj.build_tool == "npm" then
+    if not ensure_tool("npm", "Butuh Node.js/npm.\nInstall dari https://nodejs.org") then return end
+  elseif not ensure_tool("adb", nil) then
+    return
+  end
   M.close()
   tasks_m.run(proj, "run")
 end

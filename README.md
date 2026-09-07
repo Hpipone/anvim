@@ -2,13 +2,15 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.2.0** — Stable (scrcpy mirror)
+> **v1.3.0** — Stable (unified device sections, npm projects, deferred deep search)
 
 ## Features
 
 - **Dashboard** — floating window, keyboard-only (`j/k`, no horizontal drift), LSP diagnostics, auto health warnings, instant open (slow sections load async)
+- **Projects** — Flutter, Android/Gradle, **and Node** (`package.json` scripts: `npm run dev/build/test`). No forced installs: run works with whatever runner the project uses
+- **Device sections** — Emulator/Scrcpy appear only when an adb device is connected, hidden otherwise
 - **System check** — detects ADB, Java, Flutter, Git, Gradle (+Emulator, +Scrcpy), enforces minimum versions, one-key auto-install (optional tools offered too)
-- **Detection** — canonical `~/.local/bin` first, then PATH, SDK paths, `ANDROID_HOME`, then your folders (`~/Downloads`, `~/Documents`, `detect.extra_dirs`)
+- **Detection** — canonical `~/.local/bin` first, then PATH, SDK paths, `ANDROID_HOME`, then your folders (`~/Downloads`, `~/Documents`, `detect.extra_dirs`). Deep folder search runs **after** the dashboard opens (or when you trigger `:AnvimCheck`), never blocking it
 - **Installer** — download → checksum → extract → symlink into `~/.local/bin`, no sudo, multi-shell PATH; `:AnvimCheck` auto-repairs old installs
 - **Tasks** — run / clean / build / test / custom, timeout + cancel, split output + quickfix
 - **Logcat** — live view, level/tag filters, save to file, clipboard copy

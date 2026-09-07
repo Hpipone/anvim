@@ -18,6 +18,7 @@ M.MIN_VERSIONS = {
   git = { 2 },
   gradle = { 8 },
   scrcpy = { 2 },
+  node = { 18 },
 }
 
 local FLUTTER_VER = "3.47.0"
@@ -166,6 +167,21 @@ local TOOLS = {
     download = scrcpy_download(),
     post_msg = "Install scrcpy: paket distro (apt/brew/choco) atau :AnvimCheck (x86_64).",
   },
+  node = {
+    label = "Node", desc = "Node.js — npm scripts (dev/build/test)",
+    bin = (OS == "windows") and "node.exe" or "node",
+    hint = "Install Node.js LTS untuk project npm.",
+    url = "https://nodejs.org",
+    ver_arg = "--version",
+    optional = true,
+    check_paths = {
+      linux   = { "node", "~/.local/bin/node", "/usr/bin/node", "/usr/local/bin/node" },
+      macos   = { "node", "~/.local/bin/node", "/usr/bin/node", "/usr/local/bin/node", "/opt/homebrew/bin/node" },
+      windows = { "node.exe", WIN_BIN .. "\\node.exe", "C:\\Program Files\\nodejs\\node.exe" },
+    },
+    download = nil,
+    post_msg = "Install Node.js LTS: https://nodejs.org",
+  },
 }
 
 function M.get_tools_spec()
@@ -193,7 +209,7 @@ local function bin_candidates(spec)
   return names
 end
 
-local function find_tool(name)
+local function find_tool(name, deep)
   local spec = TOOLS[name]
   if not spec then return nil end
   local names = bin_candidates(spec)
@@ -245,11 +261,14 @@ local function find_tool(name)
     end
   end
 
-  -- 5. folder custom user (Downloads/Documents/dll) — fallback terakhir
-  for _, b in ipairs(names) do
-    local hit = util.search_extra_dirs(b, names)
-    if hit then
-      return { found = true, path = hit }
+  -- 5. folder custom user (Downloads/Documents/dll) — fallback terakhir,
+  --    hanya saat deep (interaktif/slow) agar dashboard cepat
+  if deep ~= false then
+    for _, b in ipairs(names) do
+      local hit = util.search_extra_dirs(b, names)
+      if hit then
+        return { found = true, path = hit }
+      end
     end
   end
 
@@ -316,11 +335,12 @@ local function tool_version_output(bin, ver_arg)
   return ""
 end
 
--- ── public check ──
-function M.check_tool(name)
+-- ── public check (opts.deep=false = skip folder custom, untuk fase cepat) ──
+function M.check_tool(name, opts)
   local spec = TOOLS[name]
   if not spec then return { found = false, label = name, status = "missing" } end
-  local r = find_tool(name)
+  local deep = not opts or opts.deep ~= false
+  local r = find_tool(name, deep)
   r.label = spec.label
   r.desc = spec.desc
   r.hint = spec.hint
@@ -344,7 +364,7 @@ function M.check_tool(name)
   return r
 end
 
-function M.check_all(only)
+function M.check_all(only, opts)
   M.results = {}
   if not only then
     local ok, c = pcall(function() return require("anvim.config").get() end)
@@ -355,7 +375,7 @@ function M.check_all(only)
     end
   end
   for _, name in ipairs(only) do
-    M.check_tool(name)
+    M.check_tool(name, opts)
   end
   return M.results
 end
@@ -530,6 +550,12 @@ end
 
 local function ui_rebuild()
   M.check_all()
+  -- project node → cek node juga (user-triggered, deep OK)
+  pcall(function()
+    if require("anvim.project").detect().type == "node" and not M.results.node then
+      M.check_tool("node")
+    end
+  end)
   local items = {}
   for _, name in ipairs(util.sorted_tool_names(M.results)) do
     local r = M.results[name]

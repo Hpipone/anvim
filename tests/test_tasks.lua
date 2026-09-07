@@ -179,4 +179,20 @@ return function(ctx)
     exit_cb(nil, 1) -- on_exit telat dari job mati
     assert(n == 0, "callback basi harus diabaikan, got " .. n)
   end)
+
+  run("tasks: cmd node pakai npm scripts", function()
+    setup()
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local proj = { type = "node", build_tool = "npm", root = "/tmp/app", scripts = { dev = "expo start", build = "expo build", test = "jest", clean = "rm" } }
+    local r = t._cmd_for(proj, "run")
+    assert(r[1] == "npm" and r[3] == "dev", table.concat(r, " "))
+    local b = t._cmd_for(proj, "build")
+    assert(b[3] == "build", table.concat(b, " "))
+    local te = t._cmd_for(proj, "test")
+    assert(te[1] == "npm" and te[2] == "test", table.concat(te, " "))
+    local bare = { type = "node", build_tool = "npm", root = "/tmp/app", scripts = {} }
+    assert(t._cmd_for(bare, "run") == nil, "tanpa script dev/start harus nil")
+    assert(t._cmd_for(bare, "build") == nil)
+  end)
 end

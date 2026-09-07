@@ -25,6 +25,12 @@ local function cmd_for(project, task_name)
   local bt = project.build_tool
 
   if task_name == "run" then
+    if t == "node" then
+      local s = project.scripts or {}
+      if s.dev then return { "npm", "run", "dev" } end
+      if s.start then return { "npm", "start" } end
+      return nil
+    end
     if t == "flutter" then
       local pre = device_prefix()
       local c = { "flutter", "run" }
@@ -42,6 +48,10 @@ local function cmd_for(project, task_name)
     return nil
   end
   if task_name == "clean" then
+    if t == "node" then
+      if (project.scripts or {}).clean then return { "npm", "run", "clean" } end
+      return nil
+    end
     if t == "flutter" then return { "flutter", "clean" } end
     if bt then
       if bt:match("gradlew") and vim.fn.executable(bt) ~= 1 and vim.fn.executable("gradle") == 1 then
@@ -52,6 +62,10 @@ local function cmd_for(project, task_name)
     return nil
   end
   if task_name == "build" then
+    if t == "node" then
+      if (project.scripts or {}).build then return { "npm", "run", "build" } end
+      return nil
+    end
     if t == "flutter" then return { "flutter", "build", "apk" } end
     if bt then
       if bt:match("gradlew") and vim.fn.executable(bt) ~= 1 and vim.fn.executable("gradle") == 1 then
@@ -62,6 +76,10 @@ local function cmd_for(project, task_name)
     return nil
   end
   if task_name == "test" then
+    if t == "node" then
+      if (project.scripts or {}).test then return { "npm", "test" } end
+      return nil
+    end
     if t == "flutter" then return { "flutter", "test" } end
     if bt then
       if bt:match("gradlew") and vim.fn.executable(bt) ~= 1 and vim.fn.executable("gradle") == 1 then

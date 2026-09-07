@@ -48,4 +48,26 @@ return function(ctx)
     assert(r.type == "unknown")
     assert(r.root ~= nil and r.root ~= "")
   end)
+
+  run("project: detect node + scripts", function()
+    mock.raw("fn.filereadable", function(name)
+      if tostring(name):find("package.json") then return 1 end
+      return 0
+    end)
+    mock.raw("fn.system", function() return "main\n" end)
+    local orig_open = io.open
+    io.open = function(path, mode)
+      if tostring(path):find("package.json") then
+        return { read = function() return '{"name":"myapp","version":"1.2.3","scripts":{"dev":"expo start","build":"expo build","test":"jest"}}' end, close = function() end }
+      end
+      return orig_open(path, mode)
+    end
+    package.loaded["anvim.project"] = nil
+    package.loaded["anvim.util"] = nil
+    local p = require("anvim.project")
+    local r = p.detect_node("/tmp/myapp")
+    assert(r.type == "node" and r.name == "myapp", "got " .. r.type .. "/" .. r.name)
+    assert(r.scripts.dev == "expo start" and r.scripts.build == "expo build")
+    io.open = orig_open
+  end)
 end

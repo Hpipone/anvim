@@ -32,6 +32,19 @@
 - [x] Active device persisten (`~/.anvim/active_device`, restore + clear)
 - [x] Tests 84 pass (13 suites)
 
+## Fase 4 — Pre-release (DONE, v1.0.0)
+- [x] Dashboard cursor lock vertikal (h/l/arrows Nop + CursorMoved snap, gg/G)
+- [x] Install window diperbesar (0.75 fraksi, min 70x26) + queue stacking bug fix
+- [x] ANDROID_HOME doctor (`:AnvimDoctor`, env issues di system check)
+- [x] `gradlew` auto `chmod +x` + fallback gradle
+- [x] `flutter devices` section di dashboard (flutter.lua)
+- [x] Logcat save (`:AnvimLogcatSave`, key `S`), tag filter (key `T`), copy line (`yy`)
+- [x] Rerun last task (`:AnvimRerun`, key `R`)
+- [x] Statusline/lualine component (`statusline.lua`)
+- [x] Help tags (`doc/tags`, `:AnvimHelp`)
+- [x] CI (GitHub Actions matrix linux/mac/win + stylua check) + `.stylua.toml`
+- [x] README English ringkas + docs sinkron
+- [x] Tests 97 pass (15 suites) → release v1.0.0
 ## Fase 5 — Canonical `~/.local/bin` detection (DONE, v1.1.0)
 - [x] Symlink deploy (`ln -sfn`, fallback copy; Windows copy) — tools-dir tetap sumber truth
 - [x] PATH session hanya `bin_dir`; `find_tool` prioritas `bin_dir` → PATH → SDK → ANDROID_HOME → folder custom
@@ -49,16 +62,10 @@
 - [x] Scrcpy discoverability: optional-installable buka UI check, hint dashboard, pick fallback ke check
 - [x] Tests 121 pass (17 suites)
 
-## Fase 4 — Pre-release (DONE, v1.0.0)
-- [x] Dashboard cursor lock vertikal (h/l/arrows Nop + CursorMoved snap, gg/G)
-- [x] Install window diperbesar (0.75 fraksi, min 70x26) + queue stacking bug fix
-- [x] ANDROID_HOME doctor (`:AnvimDoctor`, env issues di system check)
-- [x] `gradlew` auto `chmod +x` + fallback gradle
-- [x] `flutter devices` section di dashboard (flutter.lua)
-- [x] Logcat save (`:AnvimLogcatSave`, key `S`), tag filter (key `T`), copy line (`yy`)
-- [x] Rerun last task (`:AnvimRerun`, key `R`)
-- [x] Statusline/lualine component (`statusline.lua`)
-- [x] Help tags (`doc/tags`, `:AnvimHelp`)
-- [x] CI (GitHub Actions matrix linux/mac/win + stylua check) + `.stylua.toml`
-- [x] README English ringkas + docs sinkron
-- [x] Tests 97 pass (15 suites) → release v1.0.0
+## Fase 7 — unified visibility + npm + deferred search (DONE, v1.3.0)
+- [x] Emu+scrcpy hide total tanpa device adb, unhide saat ada; install tidak wajib
+- [x] Project node: `package.json` scripts (dev/build/test/clean), label Run/Build (npm), `do_run` cek npm
+- [x] TOOLS node opsional (min 18), dicek saat project node
+- [x] Deep search (`find` folder custom) hanya pasca-dashboard/saat check (`deep=false` fase cepat)
+- [x] Tests 126 pass (17 suites)
+

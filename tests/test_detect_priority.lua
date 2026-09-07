@@ -90,4 +90,28 @@ return function(ctx)
     assert(not vim.env.PATH:find(TOOLS, 1, true), "tools-dir harus hilang: " .. vim.env.PATH)
     assert(vim.env.PATH:sub(1, #BIN) == BIN, "bin_dir harus di depan: " .. vim.env.PATH)
   end)
+
+  run("detect: shallow skip folder custom (dashboard cepat)", function()
+    setup({ bin_dir = false, tools_dir = false, path_exe = nil })
+    mock.raw("fn.isdirectory", function(p)
+      if tostring(p) == HOME .. "/Downloads" then return 1 end
+      return 0
+    end)
+    mock.raw("fn.system", function(cmd)
+      if tostring(cmd):find("find") then return HOME .. "/Downloads/tool/adb\n" end
+      return ""
+    end)
+    mock.raw("fn.executable", function(p)
+      if tostring(p) == HOME .. "/Downloads/tool/adb" then return 1 end
+      if tostring(p) == "find" then return 1 end
+      return 0
+    end)
+    package.loaded["anvim.util"] = nil
+    package.loaded["anvim.system_check"] = nil
+    local sc = require("anvim.system_check")
+    local shallow = sc.check_tool("adb", { deep = false })
+    assert(shallow.found == false, "shallow tidak boleh find Downloads")
+    local deep = sc.check_tool("adb")
+    assert(deep.found == true and deep.path == HOME .. "/Downloads/tool/adb", "got " .. tostring(deep.path))
+  end)
 end

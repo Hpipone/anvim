@@ -420,4 +420,59 @@ return function(ctx)
     assert(hint == true, "hint install scrcpy harus ada")
     dash.close()
   end)
+
+  run("dashboard: hide emu+scrcpy bila tanpa device", function()
+    package.loaded["anvim.devices"] = {
+      list = function() return {} end,
+      get_active = function() return nil end,
+      set_active = function() return true end,
+    }
+    package.loaded["anvim.scrcpy"] = {
+      find_binary = function() return "/x/scrcpy" end,
+      is_running = function() return false end,
+    }
+    package.loaded["anvim.emulator"] = {
+      list_avds = function() return { "Pixel_6" } end,
+      running_map = function() return {} end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    for _, it in ipairs(dash.state.items) do
+      assert(it.type ~= "scrcpy" and it.type ~= "avd", "emu/scrcpy harus hide tanpa device")
+      if it.type == "task" then
+        assert(it.task ~= "emulator" and it.task ~= "emulator_kill" and it.task ~= "scrcpy",
+          "task emu/scrcpy harus hide")
+      end
+      if it.type == "header" then
+        assert(it.text ~= "Emulators" and it.text ~= "Scrcpy", "header harus hide")
+      end
+    end
+    dash.close()
+  end)
+
+  run("dashboard: node cek node + label npm", function()
+    local got_tools
+    package.loaded["anvim.system_check"] = {
+      check_all = function(tools, _) got_tools = tools return {} end,
+      format_line = function() return "x" end,
+    }
+    package.loaded["anvim.project"] = {
+      detect = function() return { name = "web", type = "node", branch = "main", root = "/tmp/web", scripts = { dev = "x" } } end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    local has_node = false
+    for _, t in ipairs(got_tools) do if t == "node" then has_node = true end end
+    assert(has_node == true, "node harus dicek: " .. table.concat(got_tools, ","))
+    local label_ok = false
+    for _, it in ipairs(dash.state.items) do
+      if it.type == "task" and it.task == "run" and it.label:find("npm") then label_ok = true end
+    end
+    assert(label_ok == true, "label run harus npm")
+    dash.close()
+  end)
 end
