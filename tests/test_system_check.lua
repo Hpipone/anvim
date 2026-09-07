@@ -23,7 +23,12 @@ return function(ctx)
     mock.raw("api.nvim_win_is_valid", function() return true end)
     mock.raw("api.nvim_buf_set_lines", function() end)
     mock.raw("api.nvim_buf_delete", function() end)
+    mock.raw("api.nvim_buf_set_name", function() end)
     mock.raw("api.nvim_win_close", function() end)
+    mock.raw("api.nvim_buf_add_highlight", function() end)
+    mock.raw("api.nvim_set_hl", function() end)
+    mock.raw("keymap.set", function() end)
+    mock.raw("schedule", function(fn) fn() end)
     mock.raw("o.lines", 50)
     mock.raw("o.columns", 200)
     mock.raw("env.PATH", "/usr/local/bin:/usr/bin:/bin")
@@ -79,5 +84,77 @@ return function(ctx)
     local sc = require("anvim.system_check")
     sc.interactive()
     assert(true)
+  end)
+
+  run("system_check: parse version tiap tool", function()
+    setup()
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    assert(sc._parse_version("java", 'openjdk 17.0.9 2023-10-17')[1] == 17)
+    assert(sc._parse_version("gradle", "Gradle 9.7.1")[2] == 7)
+    assert(sc._parse_version("adb", "Android Debug Bridge version 1.0.41")[3] == 41)
+    assert(sc._parse_version("flutter", "Flutter 3.47.0 • channel stable")[1] == 3)
+    assert(sc._parse_version("git", "git version 2.43.0")[1] == 2)
+    assert(sc._parse_version("java", "") == nil)
+  end)
+
+  run("system_check: meets_min menolak versi lama", function()
+    setup()
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    assert(sc._meets_min("java", { 17, 0, 9 }) == true)
+    assert(sc._meets_min("java", { 11, 0, 2 }) == false)
+    assert(sc._meets_min("gradle", { 9, 7, 1 }) == true)
+    assert(sc._meets_min("gradle", { 7, 6 }) == false)
+  end)
+
+  run("system_check: outdated + format old", function()
+    setup()
+    mock.raw("fn.system", function(cmd)
+      cmd = tostring(cmd)
+      if cmd:find("java") then return "openjdk 11.0.2" end
+      return ""
+    end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    sc.check_all({ "java" })
+    local out = sc.get_outdated()
+    assert(#out == 1 and out[1] == "java", "got " .. table.concat(out, ","))
+    local line = sc.format_line("java", sc.results.java)
+    assert(line:find("⚠") and line:find("min 17"), "got " .. line)
+  end)
+
+  run("system_check: emulator optional tidak masuk missing", function()
+    setup()
+    mock.raw("fn.executable", function() return 0 end)
+    mock.raw("fn.exepath", function() return "" end)
+    mock.raw("fn.glob", function() return {} end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    sc.check_all({ "adb", "emulator" })
+    for _, m in ipairs(sc.get_missing()) do
+      assert(m ~= "emulator", "emulator optional jangan masuk missing")
+    end
+  end)
+
+  run("system_check: interactive missing buka UI selectable", function()
+    setup()
+    mock.raw("fn.executable", function() return 0 end)
+    mock.raw("fn.exepath", function() return "" end)
+    mock.raw("fn.glob", function() return {} end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    sc.interactive()
+    assert(sc._ui.buf ~= nil, "UI buf harus dibuka saat ada missing")
+    assert(#sc._ui.items > 0)
+    sc._ui_nav(1)
+    sc._ui_nav(-1)
+    sc._ui_close()
+    assert(sc._ui.buf == nil, "UI harus bersih setelah close")
   end)
 end

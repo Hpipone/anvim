@@ -100,40 +100,32 @@ local function file_sha256(path)
   return h:lower(), nil
 end
 
---- Strict verify: wajib ada sha256_url dan cocok. Return (ok, log).
---- Jika sha256_url nil → strict gagal dengan instruksi manual (sesuai Q13).
+--- Best-effort verify: cek sha256 hanya jika sha256_url tersedia dan
+--- checksum bisa diunduh. Tidak pernah memblokir install — hanya warning.
+--- Mismatch tetap menggagalkan (file korup / MITM), tapi checksum yang
+--- hilang (mis. platform-tools Google tidak publish) hanya warning.
+--- Return true agar install lanjut; false hanya saat mismatch terbukti.
 function M.verify_sha256(zip_path, dl_info, logs)
-  local cfg_ok, cfg = pcall(function() return require("anvim.config").get() end)
-  local strict = true
-  if cfg_ok and cfg and cfg.install and cfg.install.strict_sha256 ~= nil then
-    strict = cfg.install.strict_sha256
-  end
   local sha_url = dl_info and dl_info.sha256_url or nil
   if not sha_url then
-    local msg = "No official sha256 for this artifact (Google Flutter/platform-tools tidak publish untuk varian ini)"
-    if strict then
-      table.insert(logs, "✗ STRICT sha256: " .. msg)
-      table.insert(logs, "  Install manual + verifikasi dari situs resmi, atau set setup({install={strict_sha256=false}})")
-      return false
-    end
-    table.insert(logs, "⚠ sha256 skipped: " .. msg)
+    table.insert(logs, "⚠ sha256 skipped (no official checksum published) — lanjut install")
     return true
   end
   table.insert(logs, "Verifying sha256...")
   local remote = fetch_text(sha_url)
   if not remote then
-    table.insert(logs, "✗ sha256 download gagal: " .. sha_url)
-    return false
+    table.insert(logs, "⚠ sha256 download gagal — lanjut tanpa verify: " .. sha_url)
+    return true
   end
   local expected = remote:match("(%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x)"):lower()
   if not expected then
-    table.insert(logs, "✗ sha256 remote tidak valid")
-    return false
+    table.insert(logs, "⚠ sha256 remote tidak valid — lanjut tanpa verify")
+    return true
   end
   local actual, err = file_sha256(zip_path)
   if not actual then
-    table.insert(logs, "✗ sha256 lokal gagal: " .. tostring(err))
-    return false
+    table.insert(logs, "⚠ sha256 lokal gagal (" .. tostring(err) .. ") — lanjut tanpa verify")
+    return true
   end
   if actual ~= expected then
     table.insert(logs, "✗ CHECKSUM MISMATCH!")
@@ -379,7 +371,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
       table.insert(logs, "Download done (" .. fmt_size(total) .. ")")
       redraw()
 
-      -- PHASE 1b: strict sha256 verify
+      -- PHASE 1b: best-effort sha256 verify (mismatch = gagal, hilang = warning)
       if not M.verify_sha256(zip_path, dl_info, logs) then
         redraw()
         fail("Checksum verify gagal — file dihapus agar aman", false)

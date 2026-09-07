@@ -17,15 +17,18 @@ CONTENTS                                     *anvim*
 anvim is a TUI dashboard for Android and Flutter development inside Neovim.
 It provides an interactive keyboard-driven interface for running tasks,
 viewing logcat, and managing devices — eliminating the need for Android Studio.
-Version 0.3.0.
+Version 0.4.0.
 
 Features:
   - Project auto-detection (Flutter vs Android/Gradle, git-root aware)
-  - System health check (ADB, Java, Flutter, Git, Gradle + version)
-  - Tool auto-download (sha256 strict, no-sudo ~/.local/bin)
-  - Task runner (build, clean, run, timeout, split + quickfix)
+  - System health check (versions + minimums, selectable UI, auto-download)
+  - Tool auto-download (sha256 best-effort, no-sudo ~/.local/bin)
+  - Task runner (build, clean, run, test, custom, split + quickfix)
   - Logcat viewer with live filtering (*:LEVEL)
-  - Device management (multi-device -s, unauthorized/offline warning)
+  - Device management (multi-device -s, persistent active device)
+  - Emulator manager (list AVD, launch cold/quick/wipe, kill, boot wait)
+  - Theming via highlight groups, LSP diagnostics in dashboard
+  - Emulator manager (list AVD, launch cold/quick/wipe, kill, boot wait)
 
 ==============================================================================
 2. INSTALLATION                                    *anvim-installation*
@@ -56,6 +59,10 @@ binaries are copied to ~/.local/bin/ (no sudo).
   :AnvimCheck      Run system health check
   :AnvimLogcat     Open logcat viewer
   :AnvimRun        Run app directly
+  :AnvimTest       Run project tests
+  :AnvimCustom     Run custom task (picker)
+  :AnvimEmulator   Launch Android emulator (picker)
+  :AnvimEmulatorKill Kill running emulator
 
 ==============================================================================
 4. KEYMAPS                                          *anvim-keymaps*
@@ -72,6 +79,7 @@ Dashboard navigation:
   r                Run app
   l                Open logcat
   x                Cancel running task
+  e                Launch emulator
 
 Logcat viewer:
   V / D / I / W / E / F   Filter by log level
@@ -99,9 +107,12 @@ Logcat viewer:
     },
     tasks = {
       timeout_ms = 300000,
+      custom = {
+        { label = "Lint", cmd = { "flutter", "analyze" } },
+      },
     },
-    install = {
-      strict_sha256 = true,
+    emulator = {
+      boot_timeout_ms = 120000,
     },
   })
 <

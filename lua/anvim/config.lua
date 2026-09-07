@@ -4,7 +4,7 @@
 local M = {}
 
 M.defaults = {
-  version = "0.3.0",
+  version = "0.4.0",
   dashboard = {
     width = 0.8,
     height = 0.8,
@@ -24,12 +24,14 @@ M.defaults = {
   },
   tasks = {
     timeout_ms = 300000,
-    output = "split",
+    custom = {},
   },
   install = {
     dir = nil, -- default ~/.anvim/tools (via util.tools_dir())
     bin_dir = nil, -- default ~/.local/bin (via util.local_bin())
-    strict_sha256 = true,
+  },
+  emulator = {
+    boot_timeout_ms = 120000,
   },
 }
 

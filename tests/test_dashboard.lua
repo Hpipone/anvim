@@ -72,7 +72,8 @@ return function(ctx)
     package.loaded["anvim.config"] = {
       get = function() return {
         dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
-        health_check = { tools = { "adb", "git" } },
+        health_check = { tools = { "adb", "git" }, auto = true },
+        tasks = { custom = {} },
       } end,
     }
     package.loaded["anvim.keymaps.dashboard"] = { set = function() end }
@@ -198,5 +199,116 @@ return function(ctx)
     alert_state.warn_called = false
     dash.select()
     assert(alert_state.warn_called == true)
+  end)
+
+  run("dashboard: select avd running sets active", function()
+    local active_id
+    package.loaded["anvim.devices"] = {
+      list = function() return { { id = "emulator-5554", model = "sdk", status = "device" } } end,
+      get_active = function() return nil end,
+      set_active = function(id) active_id = id return true end,
+    }
+    package.loaded["anvim.emulator"] = {
+      list_avds = function() return { "Pixel_6" } end,
+      running_map = function() return { Pixel_6 = "emulator-5554" } end,
+      launch = function() error("must not launch running avd") end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    dash.state.selected = 1
+    dash.state.items = {
+      { type = "avd", label = "Pixel_6 (emulator-5554)", avd = { name = "Pixel_6", running_id = "emulator-5554" } },
+    }
+    dash.state.proj = { name = "test", type = "android" }
+    dash.select()
+    assert(active_id == "emulator-5554", "got " .. tostring(active_id))
+  end)
+
+  run("dashboard: select avd stopped launches", function()
+    local launched
+    package.loaded["anvim.devices"] = {
+      list = function() return {} end,
+      get_active = function() return nil end,
+      set_active = function() return true end,
+    }
+    package.loaded["anvim.emulator"] = {
+      list_avds = function() return { "Pixel_6" } end,
+      running_map = function() return {} end,
+      launch = function(avd) launched = avd end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    dash.state.selected = 1
+    dash.state.items = {
+      { type = "avd", label = "Pixel_6 (stopped)", avd = { name = "Pixel_6", running_id = nil } },
+    }
+    dash.state.proj = { name = "test", type = "android" }
+    dash.select()
+    assert(launched == "Pixel_6", "got " .. tostring(launched))
+    assert(dash.state.open == false, "dashboard harus close saat launch")
+  end)
+
+  run("dashboard: custom task select run_custom", function()
+    local custom_called
+    package.loaded["anvim.config"] = {
+      get = function() return {
+        dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
+        health_check = { tools = { "adb" }, auto = false },
+        tasks = { custom = { { label = "Lint", cmd = { "echo", "lint" } } } },
+      } end,
+    }
+    package.loaded["anvim.tasks"] = { run = function() end, stop = function() end,
+      run_custom = function(cmd, label) custom_called = label end }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    local found = false
+    for i, it in ipairs(dash.state.items) do
+      if it.type == "custom" and it.label == "Lint" then
+        dash.state.selected = i found = true break
+      end
+    end
+    assert(found, "custom item harus ada")
+    dash.select()
+    assert(custom_called == "Lint", "got " .. tostring(custom_called))
+    assert(dash.state.open == false)
+  end)
+
+  run("dashboard: do_test runs test task", function()
+    local ran
+    package.loaded["anvim.tasks"] = { run = function(_, task) ran = task end, stop = function() end, run_custom = function() end }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    dash.do_test()
+    assert(ran == "test", "got " .. tostring(ran))
+  end)
+
+  run("dashboard: auto warn saat tool hilang", function()
+    package.loaded["anvim.config"] = {
+      get = function() return {
+        dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
+        health_check = { tools = { "adb" }, auto = true },
+        tasks = { custom = {} },
+      } end,
+    }
+    package.loaded["anvim.system_check"] = {
+      check_all = function() return {
+        adb = { found = false, label = "ADB", status = "missing", hint = "install", optional = false },
+      } end,
+      format_line = function() return "✗ missing" end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    alert_state.warn_called = false
+    dash.open()
+    assert(alert_state.warn_called == true, "auto health harus warn")
   end)
 end

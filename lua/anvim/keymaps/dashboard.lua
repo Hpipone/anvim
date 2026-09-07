@@ -20,6 +20,8 @@ function M.set(buf)
   map("r", "<Cmd>lua require('anvim.dashboard').do_run()<CR>",    "Run app")
   map("l", "<Cmd>lua require('anvim.dashboard').do_logcat()<CR>", "Open logcat")
   map("x", "<Cmd>lua require('anvim.dashboard').do_cancel_task()<CR>", "Cancel running task")
+  map("e", "<Cmd>lua require('anvim.dashboard').do_emulator()<CR>", "Launch emulator")
+  map("t", "<Cmd>lua require('anvim.dashboard').do_test()<CR>", "Run tests")
 end
 
 return M

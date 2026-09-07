@@ -61,6 +61,16 @@ local function cmd_for(project, task_name)
     end
     return nil
   end
+  if task_name == "test" then
+    if t == "flutter" then return { "flutter", "test" } end
+    if bt then
+      if bt:match("gradlew") and vim.fn.executable(bt) ~= 1 and vim.fn.executable("gradle") == 1 then
+        return { "gradle", "test" }
+      end
+      return { bt, "test" }
+    end
+    return nil
+  end
   if task_name == "devices" then
     return { "adb", "devices", "-l" }
   end
@@ -117,16 +127,95 @@ function M.stop()
   M.state.current = nil
 end
 
+--- Inti eksekusi: dipakai run() dan run_custom(). label untuk judul/output.
+local function run_cmd(cmd, label, cwd, on_done)
+  if M.state.running then
+    alert.warn("Task already running: " .. tostring(M.state.current) .. " (x untuk cancel)")
+    return
+  end
+
+  M.state.running = true
+  M.state.current = label
+  alert.info("Running: " .. table.concat(cmd, " "))
+
+  local buf = ensure_output_win()
+  append_output(buf, { "", "$ " .. table.concat(cmd, " ") })
+
+  local out_lines = {}
+  if not cwd or cwd == "" or vim.fn.isdirectory(cwd) ~= 1 then cwd = vim.fn.getcwd() end
+
+  local t = cfg_tasks()
+  local timed_out = false
+  local timer = nil
+  if t.timeout_ms and t.timeout_ms > 0 then
+    timer = vim.uv.new_timer()
+    timer:start(t.timeout_ms, 0, vim.schedule_wrap(function()
+      if M.state.running and M.state.current == label then
+        timed_out = true
+        M.stop()
+        append_output(buf, { "[timeout " .. tostring(t.timeout_ms) .. "ms — task di-cancel]" })
+        alert.error("task", "Timeout: " .. label)
+        if on_done then on_done(table.concat(out_lines, "\n"), false) end
+      end
+    end))
+  end
+
+  local job_id = vim.fn.jobstart(cmd, {
+    cwd = cwd,
+    stdout_buffered = false,
+    stderr_buffered = false,
+    on_stdout = function(_, data)
+      if data then
+        for _, l in ipairs(data) do
+          if l ~= "" then table.insert(out_lines, l) end
+        end
+        vim.schedule(function() append_output(M.state.buf, data) end)
+      end
+    end,
+    on_stderr = function(_, data)
+      if data then
+        for _, l in ipairs(data) do
+          if l ~= "" then table.insert(out_lines, l) end
+        end
+        vim.schedule(function() append_output(M.state.buf, data) end)
+      end
+    end,
+    on_exit = function(_, code)
+      if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
+      if timed_out then return end
+      M.state.running = false
+      M.state.current = nil
+      M.state.job_id = nil
+      local output = table.concat(out_lines, "\n")
+      local success = code == 0
+      pcall(vim.fn.setqflist, {}, " ", { title = "anvim:" .. label, lines = out_lines })
+      if success then
+        append_output(M.state.buf, { "[✓ done: " .. label .. "]" })
+        alert.ok("Task completed: " .. label)
+      else
+        append_output(M.state.buf, { "[✗ failed (" .. tostring(code) .. "): " .. label .. " — :copen untuk detail]" })
+        alert.error("task", "Task failed (code " .. tostring(code) .. "): " .. label)
+      end
+      if on_done then on_done(output, success, label) end
+    end,
+  })
+  if job_id == nil or job_id <= 0 then
+    if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
+    M.state.running = false
+    M.state.current = nil
+    alert.error("task", "jobstart gagal untuk " .. table.concat(cmd, " "))
+    if on_done then on_done("", false) end
+  else
+    M.state.job_id = job_id
+  end
+end
+
 --- Run a task by name. Calls on_done(output, success) on completion.
 function M.run(project, task_name, on_done)
   local ok, err = pcall(function()
     if not project then
       alert.error("tasks", "project nil")
       if on_done then on_done("", false) end
-      return
-    end
-    if M.state.running then
-      alert.warn("Task already running: " .. tostring(M.state.current) .. " (x untuk cancel)")
       return
     end
 
@@ -147,86 +236,35 @@ function M.run(project, task_name, on_done)
       return
     end
 
-    M.state.running = true
-    M.state.current = task_name
-    alert.info("Running: " .. table.concat(cmd, " "))
-
-    local buf = ensure_output_win()
-    append_output(buf, { "", "$ " .. table.concat(cmd, " ") })
-
-    local out_lines = {}
     local cwd = (project.root and project.root ~= "") and project.root or util.project_root()
-    if vim.fn.isdirectory(cwd) ~= 1 then cwd = vim.fn.getcwd() end
-
-    local t = cfg_tasks()
-    local timed_out = false
-    local timer = nil
-    if t.timeout_ms and t.timeout_ms > 0 then
-      timer = vim.uv.new_timer()
-      timer:start(t.timeout_ms, 0, vim.schedule_wrap(function()
-        if M.state.running and M.state.current == task_name then
-          timed_out = true
-          M.stop()
-          append_output(buf, { "[timeout " .. tostring(t.timeout_ms) .. "ms — task di-cancel]" })
-          alert.error("task", "Timeout: " .. task_name)
-          if on_done then on_done(table.concat(out_lines, "\n"), false) end
-        end
-      end))
-    end
-
-    local job_id = vim.fn.jobstart(cmd, {
-      cwd = cwd,
-      stdout_buffered = false,
-      stderr_buffered = false,
-      on_stdout = function(_, data)
-        if data then
-          for _, l in ipairs(data) do
-            if l ~= "" then table.insert(out_lines, l) end
-          end
-          vim.schedule(function() append_output(M.state.buf, data) end)
-        end
-      end,
-      on_stderr = function(_, data)
-        if data then
-          for _, l in ipairs(data) do
-            if l ~= "" then table.insert(out_lines, l) end
-          end
-          vim.schedule(function() append_output(M.state.buf, data) end)
-        end
-      end,
-      on_exit = function(_, code)
-        if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
-        if timed_out then return end
-        M.state.running = false
-        M.state.current = nil
-        M.state.job_id = nil
-        local output = table.concat(out_lines, "\n")
-        local success = code == 0
-        -- quickfix
-        pcall(vim.fn.setqflist, {}, " ", { title = "anvim:" .. task_name, lines = out_lines })
-        if success then
-          append_output(M.state.buf, { "[✓ done: " .. task_name .. "]" })
-          alert.ok("Task completed: " .. task_name)
-        else
-          append_output(M.state.buf, { "[✗ failed (" .. tostring(code) .. "): " .. task_name .. " — :copen untuk detail]" })
-          alert.error("task", "Task failed (code " .. tostring(code) .. "): " .. task_name)
-        end
-        if on_done then on_done(output, success, task_name) end
-      end,
-    })
-    if job_id == nil or job_id <= 0 then
-      if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
-      M.state.running = false
-      M.state.current = nil
-      alert.error("task", "jobstart gagal untuk " .. table.concat(cmd, " "))
-      if on_done then on_done("", false) end
-    else
-      M.state.job_id = job_id
-    end
+    run_cmd(cmd, task_name, cwd, on_done)
   end)
   if not ok then
     M.state.running = false
     alert.error("tasks run", err)
+    if on_done then on_done("", false) end
+  end
+end
+
+--- Run custom command user: cmd = {"prog","arg"...}, label untuk judul.
+function M.run_custom(cmd, label, on_done)
+  label = label or (type(cmd) == "table" and table.concat(cmd, " ") or "custom")
+  local ok, err = pcall(function()
+    if type(cmd) ~= "table" or #cmd == 0 or type(cmd[1]) ~= "string" then
+      alert.error("task", "custom cmd tidak valid (harus list string).")
+      if on_done then on_done("", false) end
+      return
+    end
+    if vim.fn.executable(cmd[1]) == 0 and not cmd[1]:find("/") then
+      alert.error("task", cmd[1] .. " tidak ditemukan di PATH. Jalankan :AnvimCheck.")
+      if on_done then on_done("", false) end
+      return
+    end
+    run_cmd(cmd, label, util.project_root(), on_done)
+  end)
+  if not ok then
+    M.state.running = false
+    alert.error("tasks custom", err)
     if on_done then on_done("", false) end
   end
 end

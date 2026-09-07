@@ -33,6 +33,35 @@ function M.setup(opts)
     local p = require("anvim.project").detect()
     require("anvim.tasks").run(p, "run")
   end, "Run app via anvim")
+  register_cmd("AnvimEmulator", function() require("anvim.emulator").pick_and_launch() end, "Launch Android emulator")
+  register_cmd("AnvimEmulatorKill", function() require("anvim.emulator").pick_and_kill() end, "Kill running emulator")
+  register_cmd("AnvimTest", function()
+    local p = require("anvim.project").detect()
+    if not p or p.type == "unknown" then
+      require("anvim.status-alert").warn("Open Android or Flutter project first.")
+      return
+    end
+    require("anvim.tasks").run(p, "test")
+  end, "Run project tests via anvim")
+  register_cmd("AnvimCustom", function()
+    local cfg = require("anvim.config").get()
+    local customs = cfg and cfg.tasks and cfg.tasks.custom or {}
+    if #customs == 0 then
+      require("anvim.status-alert").warn("No custom tasks. Define setup({tasks={custom={{label=...,cmd={...}}}}}).")
+      return
+    end
+    local labels = {}
+    for _, c in ipairs(customs) do table.insert(labels, c.label) end
+    vim.ui.select(labels, { prompt = "Custom task:" }, function(choice)
+      if not choice then return end
+      for _, c in ipairs(customs) do
+        if c.label == choice then
+          require("anvim.tasks").run_custom(c.cmd, c.label)
+          return
+        end
+      end
+    end)
+  end, "Run custom task via anvim")
 
   if vim.g.anvim_no_default_keymaps then
     return

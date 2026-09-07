@@ -8,6 +8,31 @@ M.state = {
   list = {},
 }
 
+local function persist_file()
+  return vim.fn.expand("~") .. "/.anvim/active_device"
+end
+
+local function persist_save(id)
+  pcall(function()
+    vim.fn.mkdir(vim.fn.expand("~") .. "/.anvim", "p")
+    if not id or id == "" then
+      pcall(os.remove, persist_file())
+      return
+    end
+    local f = io.open(persist_file(), "w")
+    if f then f:write(id .. "\n") f:close() end
+  end)
+end
+
+local function persist_load()
+  local f = io.open(persist_file(), "r")
+  if not f then return nil end
+  local id = f:read("*l")
+  f:close()
+  if id and vim.trim(id) ~= "" then return vim.trim(id) end
+  return nil
+end
+
 local function parse_devices(out)
   local devices = {}
   if not out or out == "" then return devices end
@@ -57,6 +82,15 @@ function M.list()
     for _, d in ipairs(devices) do if d.id == M.state.active then still = true break end end
     if not still then M.state.active = nil end
   end
+  -- restore persisted active jika masih terhubung
+  if not M.state.active then
+    local saved = persist_load()
+    if saved then
+      for _, d in ipairs(devices) do
+        if d.id == saved then M.state.active = saved break end
+      end
+    end
+  end
   -- auto-pilih jika cuma 1 device online
   if not M.state.active and #devices == 1 and devices[1].status == "device" then
     M.state.active = devices[1].id
@@ -78,8 +112,9 @@ end
 
 function M.set_active(id)
   if not id or id == "" then
-    alert.warn("Device id kosong.")
-    return false
+    M.state.active = nil
+    persist_save(nil)
+    return true
   end
   for _, d in ipairs(M.state.list) do
     if d.id == id then
@@ -87,6 +122,7 @@ function M.set_active(id)
         alert.warn("Device " .. id .. " status " .. d.status .. " — tetap dipilih tapi task mungkin gagal.")
       end
       M.state.active = id
+      persist_save(id)
       return true
     end
   end

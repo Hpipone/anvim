@@ -105,11 +105,14 @@ local suites = {
   "tests.test_project",
   "tests.test_init",
   "tests.test_health",
+  "tests.test_emulator",
+  "tests.test_theme",
 }
 
 for _, mod in ipairs(suites) do
   io.write("\n── " .. mod:gsub("^tests%.", "") .. " ──\n")
   local m = mock_mgr()
+  local saved_io_open = io.open
   local ok, fn = pcall(require, mod)
   if ok then
     local ok2, err2 = pcall(fn, { mock = m, run = run_test })
@@ -123,6 +126,8 @@ for _, mod in ipairs(suites) do
     table.insert(results.errors, { name = mod, err = fn })
   end
   m.restore_all()
+  io.open = saved_io_open
+  io.__anvim_fake = nil
   for k in pairs(package.loaded) do
     if k:match("^anvim%.") or k:match("^tests%.") then
       package.loaded[k] = nil

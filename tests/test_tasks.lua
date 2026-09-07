@@ -82,4 +82,44 @@ return function(ctx)
     t.stop()
     assert(t.state.running == false)
   end)
+
+  run("tasks: cmd test flutter + android", function()
+    setup()
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local f = t._cmd_for({ type = "flutter", build_tool = "flutter" }, "test")
+    assert(f[1] == "flutter" and f[2] == "test", table.concat(f, " "))
+    local a = t._cmd_for({ type = "android", build_tool = "gradle" }, "test")
+    assert(a[2] == "test", table.concat(a, " "))
+  end)
+
+  run("tasks: run_custom sukses", function()
+    setup()
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local ok_v
+    t.run_custom({ "echo", "hi" }, "echo-hi", function(_, ok) ok_v = ok end)
+    assert(ok_v == true)
+  end)
+
+  run("tasks: run_custom tolak cmd invalid", function()
+    setup()
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local ok_v = nil
+    t.run_custom({}, "empty", function(_, ok) ok_v = ok end)
+    assert(ok_v == false)
+    t.run_custom("bukan-table", "x", function(_, ok) ok_v = ok end)
+    assert(ok_v == false)
+  end)
+
+  run("tasks: run_custom tolak binary hilang", function()
+    setup()
+    mock.raw("fn.executable", function() return 0 end)
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local ok_v = nil
+    t.run_custom({ "ngawur-bin", "--x" }, "x", function(_, ok) ok_v = ok end)
+    assert(ok_v == false)
+  end)
 end

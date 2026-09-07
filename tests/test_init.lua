@@ -37,4 +37,23 @@ return function(ctx)
     assert(n == 0, "tidak boleh set keymap, got " .. n)
     vim.g.anvim_no_default_keymaps = nil
   end)
+
+  run("init: register AnvimTest + AnvimCustom", function()
+    local cmds = {}
+    mock.raw("api.nvim_create_user_command", function(name) table.insert(cmds, name) end)
+    mock.raw("keymap.set", function() end)
+    vim.g.anvim_loaded = nil
+    vim.g.anvim_no_default_keymaps = true
+    package.loaded["anvim.init"] = nil
+    local init = require("anvim.init")
+    init.setup({})
+    local has = function(n)
+      for _, c in ipairs(cmds) do if c == n then return true end end
+      return false
+    end
+    assert(has("AnvimTest"), "AnvimTest hilang: " .. table.concat(cmds, ","))
+    assert(has("AnvimCustom"), "AnvimCustom hilang")
+    assert(has("AnvimEmulator"), "AnvimEmulator hilang")
+    vim.g.anvim_no_default_keymaps = nil
+  end)
 end

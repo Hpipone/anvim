@@ -157,25 +157,26 @@ return function(ctx)
     assert(ins.get_total_size("https://example.com/file.zip") == 0)
   end)
 
-  run("verify_sha256: strict gagal jika tanpa sha256_url", function()
+  run("verify_sha256: lolos dengan warning jika tanpa sha256_url", function()
     base_mocks()
-    package.loaded["anvim.config"] = {
-      get = function() return { install = { strict_sha256 = true } } end,
-    }
     package.loaded["anvim.installation"] = nil
     local ins = require("anvim.installation")
     local logs = {}
     local ok = ins.verify_sha256("/tmp/f.zip", { url = "https://x/y.zip" }, logs)
-    assert(ok == false, "strict tanpa url harus gagal")
+    assert(ok == true, "tanpa url harus lolos (warning saja)")
   end)
 
-  run("verify_sha256: non-strict lolos tanpa sha256_url", function()
+  run("verify_sha256: lolos jika download checksum gagal (best-effort)", function()
     base_mocks()
+    mock.raw("fn.executable", function(name)
+      if name == "curl" then return 0 end
+      return 1
+    end)
     package.loaded["anvim.installation"] = nil
     local ins = require("anvim.installation")
     local logs = {}
-    local ok = ins.verify_sha256("/tmp/f.zip", { url = "https://x/y.zip" }, logs)
-    assert(ok == true, "non-strict harus lolos")
+    local ok = ins.verify_sha256("/tmp/f.zip", { url = "https://x/y.zip", sha256_url = "https://x/y.zip.sha256" }, logs)
+    assert(ok == true, "checksum tak terjangkau harus lolos")
   end)
 
   run("install_tool: already in PATH → skip", function()
@@ -220,7 +221,7 @@ return function(ctx)
     assert(done_ok == false)
   end)
 
-  run("install_tool: download ok → on_done(true) non-strict", function()
+  run("install_tool: download ok → on_done(true)", function()
     base_mocks()
     local cbs = {}
     local adb_calls = 0

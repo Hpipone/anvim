@@ -3,7 +3,7 @@
 **Android / Flutter Development Toolkit untuk Neovim**  
 TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygit.
 
-> **Versi 0.3.0** — Status: Beta (refaktor security + stabilitas)
+> **Versi 0.4.0** — Status: Beta (fase 3: DX + system check rombak)
 
 ---
 
@@ -12,13 +12,15 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 | Fitur | Status |
 |-------|--------|
 | **Dashboard** — floating `0.8x0.8` clamp, skip header nav, refresh devices rebuild | ✅ Stabil |
-| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + version + auto-download | ✅ Stabil |
-| **Tool Installation** — download → verify sha256 (strict) → extract → copy ke `~/.local/bin` (tanpa sudo) | ✅ Stabil |
-| **Task Runner** — run/clean/build via background job, timeout, split output + quickfix, `-s/-d` device | ✅ Stabil |
+| **System Check** — UI selectable keyboard-driven, deteksi versi + minimum (Java 17, Gradle 8), Flutter 3.47 / Gradle 9.7.1 | ✅ Stabil |
+| **Tool Installation** — download → verify sha256 (best-effort) → extract → copy ke `~/.local/bin` (tanpa sudo) | ✅ Stabil |
+| **Task Runner** — run/clean/build/test via background job, timeout, split output + quickfix, `-s/-d` device, custom tasks | ✅ Stabil |
 | **Logcat Viewer** — live `adb logcat -v time *:LEVEL`, trim history, `q` kembali ke kode | ✅ Stabil |
-| **Device Management** — detect multi-device, warning unauthorized/offline, `-s` diteruskan | ✅ Stabil |
+| **Device Management** — detect multi-device, warning unauthorized/offline, `-s` diteruskan, active persisten | ✅ Stabil |
+| **Dashboard** — theming highlight groups, diagnostics LSP, auto health warning | ✅ Stabil |
+| **Emulator Manager** — list AVD, launch (cold/quick/wipe), kill, boot wait + auto-select | ✅ Stabil |
 | **Project Detection** — git-root aware, Flutter quotes-strip, Gradle KTS, branch info | ✅ Stabil |
-| **Unit Tests** — 58 test (util/config/install/dashboard/system_check/logcat/devices/tasks/project/init/health) | ✅ Stabil |
+| **Unit Tests** — 84 test (util/config/install/dashboard/system_check/logcat/devices/tasks/project/init/health/emulator/theme) | ✅ Stabil |
 
 ---
 
@@ -105,9 +107,12 @@ return {
     },
     tasks = {
       timeout_ms = 300000,
+      custom = {
+        { label = "Lint", cmd = { "flutter", "analyze" } },
+      },
     },
-    install = {
-      strict_sha256 = true, -- false untuk skip verify (tidak disarankan)
+    emulator = {
+      boot_timeout_ms = 120000,
     },
   },
 }
@@ -132,16 +137,17 @@ use {
 
 Pertama kali jalanin `:AnvimCheck`. Ini bakal:
 
-1. Deteksi OS (Linux/macOS/Windows)
-2. Cari tool: ADB, Java, Flutter, Git, Gradle
-3. Tampilkan laporan lengkap
-4. Tool yang bisa didownload otomatis — ketik angka, enter, dia download + extract sendiri
+1. Deteksi OS (Linux/macOS/Windows) + Arch
+2. Cari tool: ADB, Java, Flutter, Git, Gradle (+ Emulator opsional) beserta versinya
+3. Tandai versi di bawah minimum (⚠ Java min 17, Gradle min 8)
+4. Tampilkan UI selectable: `j/k` navigasi, `Enter` install/pilih, `i` install semua, `q` tutup
 
 Contoh:
 
 ```
 OS: LINUX  Arch: x86_64
-✓ ADB found at /usr/bin/adb (1.0.41)
+✓ ADB 1.0.41 — /usr/bin/adb
+⚠ Java 11.0.2 outdated (min 17) — /usr/bin/java
 ✗ Flutter not found — Install Flutter SDK dan set PATH.
 1 tool(s) need install
 ```
@@ -160,8 +166,10 @@ Dashboard floating window. Navigasi:
 | `q` / `Esc` | Tutup dashboard |
 | `c` | Cek system tools (AnvimCheck) |
 | `r` | Run app |
+| `t` | Run tests |
 | `l` | Buka logcat |
 | `x` | Cancel task yang sedang jalan |
+| `e` | Launch emulator |
 
 Item di dashboard:
 
@@ -169,6 +177,8 @@ Item di dashboard:
 - **■ Show Logcat** — buka logcat viewer
 - **◐ Clean Project** — bersihin build artifacts
 - **◆ Build APK** — bikin APK doang
+- **◈ Run Tests** — `flutter test` / `./gradlew test`
+- **★ Custom** — task sendiri dari `setup({tasks={custom=...}})`
 - **↻ Refresh Devices** — refresh daftar device ADB
 - **⚡ Check System Tools** — lari ke `:AnvimCheck`
 
@@ -191,7 +201,17 @@ Live `adb logcat` di buffer terpisah. Riwayat tetap tersimpan meskipun ditutup.
 
 ### 4. Device Management
 
-Device terdeteksi muncul otomatis di dashboard. Pilih device → Enter → device aktif. Semua task (Run, Build) pakai device ini.
+Device terdeteksi muncul otomatis di dashboard. Pilih → Enter jadi device aktif (tersimpan di `~/.anvim/active_device`, restore otomatis). Semua task (Run, Build, Test) pakai device ini.
+
+### 5. Emulator Manager
+
+Butuh Android SDK Emulator + minimal 1 AVD (buat via Android Studio → Device Manager).
+
+- Dashboard → section **Emulators**: `○ Nama (stopped)` / `● Nama (emulator-5554)` + `▶ Launch Emulator…` / `■ Kill Emulator…`
+- Pilih AVD stopped → Enter langsung launch (cold boot); pilih yang running → jadi device aktif
+- Key `e` atau `:AnvimEmulator` → picker AVD + mode (cold boot / wipe data / quick boot)
+- `:AnvimEmulatorKill` → matikan emulator yang jalan
+- Setelah launch: tunggu `emulator-XXXX` muncul di `adb devices` (60s), auto-select, lalu tunggu `sys.boot_completed` (default 120s, config `emulator.boot_timeout_ms`)
 
 ---
 
@@ -203,6 +223,34 @@ Device terdeteksi muncul otomatis di dashboard. Pilih device → Enter → devic
 | `:AnvimCheck` | Cek system + download tool |
 | `:AnvimLogcat` | Buka logcat viewer |
 | `:AnvimRun` | Run app langsung |
+| `:AnvimTest` | Run project tests |
+| `:AnvimCustom` | Run custom task (picker) |
+| `:AnvimEmulator` | Launch emulator (picker) |
+| `:AnvimEmulatorKill` | Kill emulator yang jalan |
+
+### Custom tasks
+
+```lua
+require("anvim").setup({
+  tasks = {
+    custom = {
+      { label = "Lint", cmd = { "flutter", "analyze" } },
+      { label = "APK release", cmd = { "flutter", "build", "apk", "--release" } },
+    },
+  },
+})
+```
+
+Muncul di dashboard (★) + `:AnvimCustom`.
+
+### Theming
+
+Highlight groups (override sesukamu):
+
+```lua
+vim.api.nvim_set_hl(0, "AnvimSelected", { link = "Visual" })
+-- AnvimTitle, AnvimHeader, AnvimOk, AnvimWarn, AnvimError, AnvimHint
+```
 
 ---
 

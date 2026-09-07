@@ -5,10 +5,11 @@ local M = {}
 M.state = { open = false, selected = 1, items = {}, buf = nil, win = nil, proj = nil }
 local alert = require("anvim.status-alert")
 local util = require("anvim.util")
+pcall(require, "anvim.theme")
 
-local VERSION = "v0.3.0"
+local VERSION = "v0.4.0"
 
-local config_m, syscheck_m, project_m, devices_m, tasks_m
+local config_m, syscheck_m, project_m, devices_m, tasks_m, emulator_m
 
 local function lazy_modules()
   local ok
@@ -22,6 +23,8 @@ local function lazy_modules()
   if not ok then alert.error("dashboard", "devices — " .. tostring(devices_m)); devices_m = nil end
   ok, tasks_m = pcall(require, "anvim.tasks")
   if not ok then alert.error("dashboard", "tasks — " .. tostring(tasks_m)); tasks_m = nil end
+  ok, emulator_m = pcall(require, "anvim.emulator")
+  if not ok then emulator_m = nil end
   return config_m and syscheck_m and project_m and devices_m and tasks_m
 end
 
@@ -39,17 +42,59 @@ local function cfg_dashboard()
 end
 
 local function is_selectable(item)
-  return item and (item.type == "task" or item.type == "device")
+  return item and (item.type == "task" or item.type == "device" or item.type == "avd" or item.type == "custom")
+end
+
+local function custom_tasks()
+  local ok, c = pcall(function() return require("anvim.config").get() end)
+  if ok and c and c.tasks and type(c.tasks.custom) == "table" then
+    return c.tasks.custom
+  end
+  return {}
+end
+
+--- Ringkasan diagnostics LSP untuk project (nil jika tidak ada).
+local function diag_line(proj)
+  local ok, res = pcall(function()
+    if not (vim.diagnostic and vim.diagnostic.get) then return nil end
+    local diags = vim.diagnostic.get(nil)
+    if not diags or #diags == 0 then return nil end
+    local sev_ok, sev = pcall(function() return vim.diagnostic.severity end)
+    local e, w = 0, 0
+    local root = (proj and proj.root) or ""
+    for _, d in ipairs(diags) do
+      local in_proj = true
+      if root ~= "" and d.bufnr then
+        local name_ok, name = pcall(vim.api.nvim_buf_get_name, d.bufnr)
+        in_proj = name_ok and name:sub(1, #root) == root
+      end
+      if in_proj then
+        if sev_ok and sev and d.severity == sev.ERROR then e = e + 1
+        elseif sev_ok and sev and d.severity == sev.WARN then w = w + 1
+        else w = w + 1 end
+      end
+    end
+    if e == 0 and w == 0 then return nil end
+    return string.format("Diagnostics: E%d W%d", e, w)
+  end)
+  if ok then return res end
+  return nil
 end
 
 -- ── content builder ──
-local function build_items(proj, h_results, dev_list)
+local function build_items(proj, h_results, dev_list, avd_info)
   local items = {}
   table.insert(items, { type = "header", text = "Tasks" })
   table.insert(items, { type = "task", label = "Run App", task = "run", icon = "▶" })
   table.insert(items, { type = "task", label = "Show Logcat", task = "logcat", icon = "■" })
   table.insert(items, { type = "task", label = "Clean Project", task = "clean", icon = "◐" })
   table.insert(items, { type = "task", label = "Build APK", task = "build", icon = "◆" })
+  table.insert(items, { type = "task", label = "Run Tests", task = "test", icon = "◈" })
+  for _, c in ipairs(custom_tasks()) do
+    if type(c.label) == "string" and type(c.cmd) == "table" then
+      table.insert(items, { type = "custom", label = c.label, cmd = c.cmd, icon = "★" })
+    end
+  end
   table.insert(items, { type = "header", text = "Devices" })
   if dev_list and #dev_list > 0 then
     for _, d in ipairs(dev_list) do
@@ -62,6 +107,22 @@ local function build_items(proj, h_results, dev_list)
     table.insert(items, { type = "hint", text = "(no devices — hubungkan device / emulator)" })
   end
   table.insert(items, { type = "task", label = "Refresh Devices", task = "devices", icon = "↻" })
+  table.insert(items, { type = "header", text = "Emulators" })
+  if avd_info and #avd_info > 0 then
+    for _, a in ipairs(avd_info) do
+      if a.running_id then
+        local is_active = devices_m and a.running_id == devices_m.get_active()
+        local prefix = is_active and "●" or "○"
+        table.insert(items, { type = "avd", label = string.format("%s %s (%s)", prefix, a.name, a.running_id), avd = a })
+      else
+        table.insert(items, { type = "avd", label = string.format("○ %s (stopped)", a.name), avd = a })
+      end
+    end
+  else
+    table.insert(items, { type = "hint", text = "(no AVD — buat via Android Studio Device Manager)" })
+  end
+  table.insert(items, { type = "task", label = "Launch Emulator…", task = "emulator", icon = "▶" })
+  table.insert(items, { type = "task", label = "Kill Emulator…", task = "emulator_kill", icon = "■" })
   table.insert(items, { type = "header", text = "System" })
   table.insert(items, { type = "task", label = "Check System Tools", task = "check", icon = "⚡" })
   table.insert(items, { type = "header", text = "Info" })
@@ -89,17 +150,25 @@ end
 local function render(buf, items, selected, proj, dev_active, height, width)
   local ok, err = pcall(function()
     local content = {}
+    local marks = {}
     local cur_sel_line = nil
 
-    local function add(l) table.insert(content, l) end
+    local function add(l, g)
+      table.insert(content, l)
+      table.insert(marks, g)
+    end
 
-    add(center("a n v i m", width))
+    add(center("a n v i m", width), "AnvimTitle")
     add(center("Android / Flutter Toolkit  " .. VERSION, width))
     add("")
     local info = string.format("Project: %s (%s)  |  Device: %s", proj.name or "?", proj.type or "?", dev_active or "none")
     add(center(info, width))
     if proj.branch and proj.branch ~= "" then
       add(center("Branch: " .. proj.branch, width))
+    end
+    local diag = diag_line(proj)
+    if diag then
+      add(center(diag, width), (diag:find("E[1-9]") and "AnvimError" or "AnvimWarn"))
     end
     add(center(string.rep("─", math.min(60, width - 4)), width))
     add("")
@@ -109,26 +178,37 @@ local function render(buf, items, selected, proj, dev_active, height, width)
       local prefix = is_sel and "→ " or "  "
       if item.type == "header" then
         add("")
-        add(center("── " .. item.text .. " ──", width))
+        add(center("── " .. item.text .. " ──", width), "AnvimHeader")
       elseif item.type == "hint" then
-        add(center(item.text, width))
+        add(center(item.text, width), "AnvimHint")
       elseif item.type == "task" then
         local txt = prefix .. (item.icon or " ") .. "  " .. item.label
-        add(center(txt, width))
+        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        if is_sel then cur_sel_line = #content end
+      elseif item.type == "custom" then
+        local txt = prefix .. (item.icon or "★") .. "  " .. item.label
+        add(center(txt, width), is_sel and "AnvimSelected" or nil)
         if is_sel then cur_sel_line = #content end
       elseif item.type == "device" then
         local txt = prefix .. item.label
-        add(center(txt, width))
+        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        if is_sel then cur_sel_line = #content end
+      elseif item.type == "avd" then
+        local txt = prefix .. "▣  " .. item.label
+        add(center(txt, width), is_sel and "AnvimSelected" or nil)
         if is_sel then cur_sel_line = #content end
       elseif item.type == "health" then
         local line = (is_sel and prefix or "  ") .. syscheck_m.format_line(item.tool, item.result)
-        add(center(line, width))
+        local g = is_sel and "AnvimSelected"
+          or (item.result.status == "ok" and "AnvimOk"
+            or item.result.status == "old" and "AnvimWarn" or "AnvimError")
+        add(center(line, width), g)
       end
     end
 
     add("")
     add(center(string.rep("─", math.min(60, width - 4)), width))
-    add(center("j/k Navigate  Enter Select  x Cancel task  ESC Quit  c Check  r Run  l Logcat", width))
+    add(center("j/k Navigate  Enter Select  x Cancel  e Emulator  t Tests  ESC Quit  c Check  r Run  l Logcat", width))
 
     local vert_pad = math.floor(math.max(0, height - #content) / 2)
     local lines = {}
@@ -138,6 +218,12 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
+
+    for i, g in ipairs(marks) do
+      if g then
+        pcall(vim.api.nvim_buf_add_highlight, buf, -1, g, vert_pad + i - 1, 0, -1)
+      end
+    end
 
     if cur_sel_line then
       pcall(vim.api.nvim_win_set_cursor, vim.fn.bufwinid(buf), { vert_pad + cur_sel_line, 2 })
@@ -160,7 +246,19 @@ local function refresh_state()
   local ok_c, c = pcall(function() return require("anvim.config").get() end)
   if ok_c and c and c.health_check and c.health_check.tools then tools = c.health_check.tools end
   local h_results = syscheck_m.check_all(tools)
-  M.state.items = build_items(proj, h_results, dev_list)
+  -- AVD info: best-effort, jangan bikin dashboard lambat/crash
+  local avd_info = {}
+  if emulator_m then
+    local ok_e, avds = pcall(emulator_m.list_avds)
+    if ok_e and avds then
+      local rmap = {}
+      pcall(function() rmap = emulator_m.running_map(dev_list) or {} end)
+      for _, name in ipairs(avds) do
+        table.insert(avd_info, { name = name, running_id = rmap[name] })
+      end
+    end
+  end
+  M.state.items = build_items(proj, h_results, dev_list, avd_info)
   M.state.proj = proj
   if not is_selectable(M.state.items[M.state.selected]) then
     M.state.selected = first_selectable(M.state.items)
@@ -201,6 +299,28 @@ function M.open()
     M.state.selected = first_selectable(M.state.items)
     render(buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
     require("anvim.keymaps.dashboard").set(buf)
+
+    -- health_check.auto: peringatkan tool wajib yang hilang (sekali per buka)
+    pcall(function()
+      local cfg = config_m.get()
+      if cfg and cfg.health_check and cfg.health_check.auto then
+        local missing, outdated = {}, {}
+        for _, it in ipairs(M.state.items) do
+          if it.type == "health" and it.result then
+            if it.result.status == "missing" and not it.result.optional then
+              table.insert(missing, it.result.label or it.tool)
+            elseif it.result.status == "old" then
+              table.insert(outdated, it.result.label or it.tool)
+            end
+          end
+        end
+        if #missing > 0 then
+          alert.warn("Missing: " .. table.concat(missing, ", ") .. " — tekan c untuk install.")
+        elseif #outdated > 0 then
+          alert.warn("Outdated: " .. table.concat(outdated, ", ") .. " — pertimbangkan upgrade.")
+        end
+      end
+    end)
   end)
   if not ok then
     alert.error("buka dashboard", err)
@@ -264,10 +384,40 @@ function M.do_run()
   tasks_m.run(proj, "run")
 end
 
+function M.do_test()
+  local proj = project_m.detect()
+  if not ensure_project(proj) then return end
+  M.close()
+  tasks_m.run(proj, "test")
+end
+
+function M.do_custom(cmd, label)
+  M.close()
+  tasks_m.run_custom(cmd, label)
+end
+
 function M.do_cancel_task()
   if tasks_m and tasks_m.stop then
     tasks_m.stop()
     alert.info("Task cancelled")
+  end
+end
+
+function M.do_emulator()
+  M.close()
+  local ok, emu = pcall(require, "anvim.emulator")
+  if ok then emu.pick_and_launch() end
+end
+
+function M.do_emulator_kill()
+  local ok, emu = pcall(require, "anvim.emulator")
+  if ok then emu.pick_and_kill() end
+  -- refresh agar status kill terlihat
+  if M.state.open then
+    refresh_state()
+    local _, height, _, _ = current_geom()
+    local width = select(1, current_geom())
+    render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
   end
 end
 
@@ -279,6 +429,8 @@ function M.select()
     if item.type == "task" then
       if item.task == "logcat" then M.do_logcat()
       elseif item.task == "check" then M.do_check()
+      elseif item.task == "emulator" then M.do_emulator()
+      elseif item.task == "emulator_kill" then M.do_emulator_kill()
       elseif item.task == "devices" then
         local dl = devices_m.list()
         refresh_state()
@@ -292,6 +444,9 @@ function M.select()
         M.close()
         tasks_m.run(proj, item.task)
       end
+    elseif item.type == "custom" then
+      M.close()
+      tasks_m.run_custom(item.cmd, item.label)
     elseif item.type == "device" then
       local all = devices_m.list()
       local valid = false
@@ -307,6 +462,20 @@ function M.select()
       local _, height, _, _ = current_geom()
       local width = select(1, current_geom())
       render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
+    elseif item.type == "avd" then
+      local a = item.avd
+      if a.running_id then
+        devices_m.set_active(a.running_id)
+        alert.info("Active: " .. a.name .. " (" .. a.running_id .. ")")
+        refresh_state()
+        local _, height2, _, _ = current_geom()
+        local width2 = select(1, current_geom())
+        render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height2, width2)
+      else
+        M.close()
+        local ok2, emu = pcall(require, "anvim.emulator")
+        if ok2 then emu.launch(a.name, { cold_boot = true }) end
+      end
     end
   end)
   if not ok then alert.error("select", err) end
