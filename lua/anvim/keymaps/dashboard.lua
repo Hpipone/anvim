@@ -1,5 +1,4 @@
 -- anvim: keymaps for dashboard buffer
--- nav: j/k/up/down ← → dedicated do_* functions for c/r/l
 
 local M = {}
 
@@ -20,6 +19,7 @@ function M.set(buf)
   map("c", "<Cmd>lua require('anvim.dashboard').do_check()<CR>",  "Check system tools")
   map("r", "<Cmd>lua require('anvim.dashboard').do_run()<CR>",    "Run app")
   map("l", "<Cmd>lua require('anvim.dashboard').do_logcat()<CR>", "Open logcat")
+  map("x", "<Cmd>lua require('anvim.dashboard').do_cancel_task()<CR>", "Cancel running task")
 end
 
 return M

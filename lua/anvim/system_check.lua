@@ -1,40 +1,40 @@
 -- anvim: system_check — detect OS, cek tools, rekomendasi download
 -- human-readable: "Check System Tools" bukan "Health Check"
+-- single source untuk health (health.lua adalah shim ke modul ini).
 
 local M = {}
 M.results = {}
 local alert = require("anvim.status-alert")
+local util = require("anvim.util")
 
--- ── OS detection ──
-local OS = vim.uv.os_uname().sysname:lower()
-if OS:find("windows") or OS:find("win32") then OS = "windows"
-elseif OS:find("darwin") then OS = "macos"
-else OS = "linux" end
-
-local ARCH = vim.uv.os_uname().machine:lower()
-if ARCH == "aarch64" or ARCH == "arm64" then ARCH = "arm64"
-elseif ARCH == "x86_64" or ARCH == "amd64" then ARCH = "x86_64"
-end
+local OS = util.OS
+local ARCH = util.ARCH
 
 -- ── tool definitions ──
+-- sha256_url: official checksum. Gradle & Flutter publish .sha256;
+-- platform-tools Google tidak publish checksum → sha256_url=nil (wajib manual verify dilewati dengan warning keras).
 local TOOLS = {
   adb = {
     label = "ADB", desc = "Android Debug Bridge — komunikasi device",
     bin = (OS == "windows") and "adb.exe" or "adb",
+    hint = "Install Android SDK Platform-Tools atau pakai :AnvimCheck auto-download.",
+    url = "https://developer.android.com/studio/command-line",
     check_paths = {
-      linux   = { "adb", "~/Android/Sdk/platform-tools/adb", "~/android/platform-tools/adb", "/usr/bin/adb", "/usr/local/bin/adb" },
-      macos   = { "adb", "~/Android/Sdk/platform-tools/adb", "~/Library/Android/sdk/platform-tools/adb", "/usr/local/bin/adb" },
+      linux   = { "adb", "~/Android/Sdk/platform-tools/adb", "~/android/platform-tools/adb", "~/.local/bin/adb", "/usr/bin/adb", "/usr/local/bin/adb" },
+      macos   = { "adb", "~/Android/Sdk/platform-tools/adb", "~/Library/Android/sdk/platform-tools/adb", "~/.local/bin/adb", "/usr/local/bin/adb" },
       windows = { "adb.exe", "~/AppData/Local/Android/Sdk/platform-tools/adb.exe", "C:\\Android\\platform-tools\\adb.exe" },
     },
     download = {
-      linux   = { url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip", file = "platform-tools-latest-linux.zip", dir = "platform-tools" },
-      macos   = { url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip", file = "platform-tools-latest-darwin.zip", dir = "platform-tools" },
-      windows = { url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip", file = "platform-tools-latest-windows.zip", dir = "platform-tools" },
+      linux   = { url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip", file = "platform-tools-latest-linux.zip", dir = "platform-tools", sha256_url = nil },
+      macos   = { url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip", file = "platform-tools-latest-darwin.zip", dir = "platform-tools", sha256_url = nil },
+      windows = { url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip", file = "platform-tools-latest-windows.zip", dir = "platform-tools", sha256_url = nil },
     },
   },
   java = {
     label = "Java", desc = "Java Runtime — Gradle build Android",
     bin = (OS == "windows") and "java.exe" or "java",
+    hint = "Install OpenJDK 17+.",
+    url = "https://adoptium.net",
     check_paths = {
       linux   = { "java", "/usr/bin/java", "/usr/lib/jvm/*/bin/java" },
       macos   = { "java", "/usr/bin/java", "/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java" },
@@ -46,20 +46,24 @@ local TOOLS = {
   flutter = {
     label = "Flutter", desc = "Flutter SDK — UI multiplatform",
     bin = (OS == "windows") and "flutter.exe" or "flutter",
+    hint = "Install Flutter SDK dan set PATH.",
+    url = "https://flutter.dev/docs/get-started/install",
     check_paths = {
-      linux   = { "flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/flutter/bin/flutter" },
-      macos   = { "flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/homebrew/bin/flutter" },
+      linux   = { "flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/flutter/bin/flutter", "~/.local/bin/flutter" },
+      macos   = { "flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/homebrew/bin/flutter", "~/.local/bin/flutter" },
       windows = { "flutter.exe", "~/flutter/bin/flutter.exe", "C:\\flutter\\bin\\flutter.exe" },
     },
     download = {
-      linux   = { url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.29.2-stable.tar.xz", file = "flutter.tar.xz", dir = "flutter" },
-      macos   = { url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.29.2-stable.zip", file = "flutter.zip", dir = "flutter" },
-      windows = { url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.29.2-stable.zip", file = "flutter.zip", dir = "flutter" },
+      linux   = { url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.29.2-stable.tar.xz", file = "flutter.tar.xz", dir = "flutter", sha256_url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.29.2-stable.tar.xz.sha256" },
+      macos   = { url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_3.29.2-stable.zip", file = "flutter.zip", dir = "flutter", sha256_url = nil },
+      windows = { url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/windows/flutter_windows_3.29.2-stable.zip", file = "flutter.zip", dir = "flutter", sha256_url = nil },
     },
   },
   git = {
     label = "Git", desc = "Version control — info branch & project version",
     bin = (OS == "windows") and "git.exe" or "git",
+    hint = "Install Git dari package manager.",
+    url = "https://git-scm.com/downloads",
     check_paths = {
       linux   = { "git", "/usr/bin/git", "/usr/local/bin/git" },
       macos   = { "git", "/usr/bin/git", "/usr/local/bin/git" },
@@ -71,18 +75,28 @@ local TOOLS = {
   gradle = {
     label = "Gradle", desc = "Build tool Android",
     bin = (OS == "windows") and "gradle.exe" or "gradle",
+    hint = "Install Gradle atau pakai ./gradlew project.",
+    url = "https://gradle.org/install",
     check_paths = {
-      linux   = { "gradle", "/usr/bin/gradle", "/usr/local/bin/gradle" },
-      macos   = { "gradle", "/usr/bin/gradle", "/usr/local/bin/gradle" },
+      linux   = { "gradle", "~/.local/bin/gradle", "/usr/bin/gradle", "/usr/local/bin/gradle" },
+      macos   = { "gradle", "~/.local/bin/gradle", "/usr/bin/gradle", "/usr/local/bin/gradle" },
       windows = { "gradle.exe", "C:\\Gradle\\bin\\gradle.exe" },
     },
     download = {
-      linux   = { url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip", file = "gradle.zip", dir = "gradle-8.10.2" },
-      macos   = { url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip", file = "gradle.zip", dir = "gradle-8.10.2" },
-      windows = { url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip", file = "gradle.zip", dir = "gradle-8.10.2" },
+      linux   = { url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip", file = "gradle.zip", dir = "gradle-8.10.2", sha256_url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip.sha256" },
+      macos   = { url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip", file = "gradle.zip", dir = "gradle-8.10.2", sha256_url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip.sha256" },
+      windows = { url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip", file = "gradle.zip", dir = "gradle-8.10.2", sha256_url = "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip.sha256" },
     },
   },
 }
+
+function M.get_tools_spec()
+  return TOOLS
+end
+
+function M.get_os()
+  return OS, ARCH
+end
 
 -- ── cari binary ──
 local function find_tool(name)
@@ -95,7 +109,7 @@ local function find_tool(name)
   end
 
   for _, p in ipairs(spec.check_paths[OS]) do
-    if not p:find("*") then
+    if not p:find("*", 1, true) then
       local e = vim.fn.expand(p)
       if vim.fn.executable(e) == 1 then
         return { found = true, path = e }
@@ -125,6 +139,18 @@ local function find_tool(name)
   return { found = false, path = nil }
 end
 
+local function tool_version(bin)
+  if not bin or bin == "" then return "" end
+  if not util.is_safe_bin_name(vim.fn.fnamemodify(bin, ":t")) and vim.fn.executable(bin) ~= 1 then
+    -- bin adalah path; ambil basename untuk validasi longgar
+  end
+  local ok, out = pcall(vim.fn.system, util.esc(bin) .. " --version 2>/dev/null | head -1")
+  if ok and out and vim.trim(out) ~= "" then
+    return vim.trim(out):sub(1, 80)
+  end
+  return ""
+end
+
 -- ── public check ──
 function M.check_tool(name)
   local spec = TOOLS[name]
@@ -132,10 +158,16 @@ function M.check_tool(name)
   local r = find_tool(name)
   r.label = spec.label
   r.desc = spec.desc
+  r.hint = spec.hint
+  r.url = spec.url
   r.can_download = spec.download ~= nil
   r.name = name
   r.bin = spec.bin
-  r.download = spec.download
+  r.download = spec.download and spec.download[OS] or nil
+  r.post_msg = spec.post_msg
+  if r.found then
+    r.version = tool_version(r.path ~= "" and r.path or spec.bin)
+  end
   M.results[name] = r
   return r
 end
@@ -150,29 +182,46 @@ end
 
 function M.get_missing()
   local missing = {}
+  for _, name in ipairs(util.TOOL_ORDER) do
+    local r = M.results[name]
+    if r and not r.found then table.insert(missing, name) end
+  end
   for name, r in pairs(M.results) do
-    if not r.found then table.insert(missing, name) end
+    local known = false
+    for _, x in ipairs(util.TOOL_ORDER) do if x == name then known = true break end end
+    if not known and not r.found then table.insert(missing, name) end
   end
   return missing
 end
 
 function M.format_line(name, r)
-  if r.found then return "✓ " .. r.path end
-  return "✗ Not found"
+  local spec = TOOLS[name]
+  local label = (r and r.label) or (spec and spec.label) or name
+  if r and r.found then
+    local v = r.version and r.version ~= "" and (" (" .. r.version .. ")") or ""
+    return string.format("✓ %s found at %s%s", label, r.path, v)
+  end
+  local hint = (r and r.hint) or (spec and spec.hint) or ""
+  if hint ~= "" then
+    return string.format("✗ %s not found — %s", label, hint)
+  end
+  return string.format("✗ %s not found", label)
 end
 
 -- ── interactive check + multi-select download ──
 function M.interactive()
   M.check_all()
 
-  -- build report + floating window
   local buf = vim.api.nvim_create_buf(false, true)
+  local n_results = util.tbl_count(M.results)
   local width = 57
-  local height = math.min(#M.results + 8, 25)
+  local height = math.min(n_results + 8, 25)
+  local cols = vim.o.columns or 80
+  local lines_n = vim.o.lines or 24
   local win = vim.api.nvim_open_win(buf, true, {
     relative = "editor", width = width, height = height,
-    col = math.floor((vim.o.columns - width) / 2),
-    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor(math.max(0, (cols - width) / 2)),
+    row = math.floor(math.max(0, (lines_n - height) / 2)),
     style = "minimal", border = "rounded",
     title = " System Check ", title_pos = "center",
   })
@@ -185,35 +234,28 @@ function M.interactive()
   end
 
   local function close_win()
-    if win and vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
-    if buf and vim.api.nvim_buf_is_valid(buf) then vim.api.nvim_buf_delete(buf, { force = true }) end
+    util.close_win_buf(win, buf)
   end
 
-  local report = { "╭───── anvim System Check ─────────────────────────────╮" }
-  table.insert(report, "│ OS: " .. string.format("%-8s", OS:upper()) .. "  Arch: " .. ARCH .. "                   │")
+  local report = { "OS: " .. OS:upper() .. "  Arch: " .. ARCH }
   local missing = {}
-  for name, r in pairs(M.results) do
-    if r.found then
-      local p = r.path:len() > 40 and "..." .. r.path:sub(-37) or r.path
-      table.insert(report, "│  ✓ " .. string.format("%-10s", r.label) .. p .. string.rep(" ", 17) .. "│")
-    else
-      table.insert(missing, name)
-      table.insert(report, "│  ✗ " .. string.format("%-10s", r.label) .. "not found" .. string.rep(" ", 17) .. "│")
-    end
+  for _, name in ipairs(util.sorted_tool_names(M.results)) do
+    local r = M.results[name]
+    table.insert(report, M.format_line(name, r))
+    if not r.found then table.insert(missing, name) end
   end
   if #missing == 0 then
-    table.insert(report, "│                                                       │")
-    table.insert(report, "│  ✅ ALL GOOD                                          │")
+    table.insert(report, "")
+    table.insert(report, "ALL GOOD")
   else
-    table.insert(report, "├───────────────────────────────────────────────────────┤")
-    table.insert(report, "│  ⚠ " .. #missing .. " tool(s) need install" .. string.rep(" ", 30 - #tostring(#missing)) .. "│")
+    table.insert(report, "")
+    table.insert(report, tostring(#missing) .. " tool(s) need install")
   end
-  table.insert(report, "╰───────────────────────────────────────────────────────╯")
   set_content(report)
 
   if #missing == 0 then
     vim.defer_fn(function()
-      vim.notify("All tools detected", vim.log.levels.INFO)
+      alert.ok("All tools detected")
       close_win()
       vim.schedule(function() pcall(require("anvim.dashboard").open) end)
     end, 1500)
@@ -233,7 +275,7 @@ function M.interactive()
       table.insert(dl_list, name)
       table.insert(menu, "    " .. #dl_list .. ". " .. spec.label .. " — " .. spec.desc)
     else
-      table.insert(menu, "    -  " .. spec.label .. " — " .. (spec.post_msg or "Install manually"))
+      table.insert(menu, "    -  " .. spec.label .. " — " .. (spec.post_msg or spec.hint or "Install manually"))
     end
   end
   table.insert(menu, "")
@@ -242,11 +284,10 @@ function M.interactive()
 
   if #dl_list == 0 then
     close_win()
-    vim.notify("All missing tools must be installed manually", vim.log.levels.WARN)
+    alert.warn("All missing tools must be installed manually")
     return
   end
 
-  -- prompt pake command-line input
   vim.fn.inputsave()
   local raw = vim.fn.input("Pick tools (comma-separated, e.g. 1,2,3): ")
   vim.fn.inputrestore()
@@ -289,15 +330,20 @@ function M.interactive()
       return
     end
     if idx > #picks then
-      vim.notify("All downloads complete! Tools ready.", vim.log.levels.INFO)
+      alert.ok("All downloads complete! Tools ready.")
       vim.schedule(function() pcall(require("anvim.dashboard").open) end)
       return
     end
     local tool = picks[idx]
     local spec = TOOLS[tool]
     local dl = spec.download[OS]
-    ins.install_tool(tool, dl, spec.label, spec.bin, function()
+    ins.install_tool(tool, dl, spec.label, spec.bin, function(ok_done)
       idx = idx + 1
+      if not ok_done then
+        alert.error("install", tool .. " gagal — chain berhenti")
+        vim.schedule(function() pcall(require("anvim.dashboard").open) end)
+        return
+      end
       vim.schedule(next_install)
     end)
   end

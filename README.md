@@ -3,7 +3,7 @@
 **Android / Flutter Development Toolkit untuk Neovim**  
 TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygit.
 
-> **Versi 0.2.0** — Status: Beta
+> **Versi 0.3.0** — Status: Beta (refaktor security + stabilitas)
 
 ---
 
@@ -11,14 +11,14 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 
 | Fitur | Status |
 |-------|--------|
-| **Dashboard** — floating window TUI navigasi task, device, status tool | ✅ Stabil |
-| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + auto-download | ✅ Stabil |
-| **Tool Installation** — download → extract → deploy (mv /usr/bin/ / sudo / PATH fallback) | ✅ Stabil |
-| **Task Runner** — run, clean, build APK via background job (non-blocking) | ✅ Stabil |
-| **Logcat Viewer** — live `adb logcat`, filter level (V/D/I/W/E/F), riwayathistory | ✅ Stabil |
-| **Device Management** — detect & select ADB device | ✅ Stabil |
-| **Project Detection** — auto-detect Flutter (pubspec.yaml) / Android (build.gradle) | ✅ Stabil |
-| **Unit Tests** — 30 test mencakup semua modul inti | ✅ Stabil |
+| **Dashboard** — floating `0.8x0.8` clamp, skip header nav, refresh devices rebuild | ✅ Stabil |
+| **System Check** — deteksi ADB, Java, Flutter, Git, Gradle + version + auto-download | ✅ Stabil |
+| **Tool Installation** — download → verify sha256 (strict) → extract → copy ke `~/.local/bin` (tanpa sudo) | ✅ Stabil |
+| **Task Runner** — run/clean/build via background job, timeout, split output + quickfix, `-s/-d` device | ✅ Stabil |
+| **Logcat Viewer** — live `adb logcat -v time *:LEVEL`, trim history, `q` kembali ke kode | ✅ Stabil |
+| **Device Management** — detect multi-device, warning unauthorized/offline, `-s` diteruskan | ✅ Stabil |
+| **Project Detection** — git-root aware, Flutter quotes-strip, Gradle KTS, branch info | ✅ Stabil |
+| **Unit Tests** — 58 test (util/config/install/dashboard/system_check/logcat/devices/tasks/project/init/health) | ✅ Stabil |
 
 ---
 
@@ -56,7 +56,7 @@ TUI dashboard floating — alternatif ringan Android Studio. Terinspirasi lazygi
 
 ## TODO (Roadmap)
 
-- Belum ada. Semua item selesai dikerjakan.
+Lihat `todo-plan.md` untuk long-term plan (emulator manager, LSP, test integration, theming, custom tasks API, version check).
 
 ---
 
@@ -101,6 +101,13 @@ return {
     logcat = {
       max_lines = 5000,
       filter_default = "I",
+      no_dashboard_on_close = true,
+    },
+    tasks = {
+      timeout_ms = 300000,
+    },
+    install = {
+      strict_sha256 = true, -- false untuk skip verify (tidak disarankan)
     },
   },
 }
@@ -133,17 +140,13 @@ Pertama kali jalanin `:AnvimCheck`. Ini bakal:
 Contoh:
 
 ```
-╭───── anvim System Check ─────────────────────────────╮
-│ OS: LINUX    Arch: x86_64                             │
-│ ✓ ADB       /usr/bin/adb                              │
-│ ✗ Flutter   tidak ditemukan                           │
-│ ✓ Git       /usr/bin/git                              │
-├───────────────────────────────────────────────────────┤
-│ ⚠  1 tool(s) perlu install                            │
-╰───────────────────────────────────────────────────────╯
+OS: LINUX  Arch: x86_64
+✓ ADB found at /usr/bin/adb (1.0.41)
+✗ Flutter not found — Install Flutter SDK dan set PATH.
+1 tool(s) need install
 ```
 
-Hasil download di `~/.anvim/tools/<nama_tool>/`.
+Hasil download di `~/.anvim/tools/<nama_tool>/`, binary di-copy ke `~/.local/bin/` (tanpa sudo, PATH di-inject ke shell RC).
 
 ### 2. Buka Dashboard — `:Anvim` atau `<leader>ad`
 
@@ -158,6 +161,7 @@ Dashboard floating window. Navigasi:
 | `c` | Cek system tools (AnvimCheck) |
 | `r` | Run app |
 | `l` | Buka logcat |
+| `x` | Cancel task yang sedang jalan |
 
 Item di dashboard:
 
@@ -183,7 +187,7 @@ Live `adb logcat` di buffer terpisah. Riwayat tetap tersimpan meskipun ditutup.
 | `E` | Filter ERROR |
 | `F` | Filter FATAL |
 | `/` | Cari teks di log |
-| `q` / `Esc` | Tutup (kembali ke dashboard) |
+| `q` / `Esc` | Tutup (kembali ke kode) |
 
 ### 4. Device Management
 

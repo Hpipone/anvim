@@ -1,11 +1,11 @@
--- anvim: logcat viewer — live adb logcat, reopen with history, reopen dashboard on close
+-- anvim: logcat viewer — live adb logcat, filter level benar, history trim, device -s
 
 local M = {}
 M.buf = nil
 M.win = nil
 M.job_id = nil
 M.running = false
-M.history = {}  -- preserve logs across reopen
+M.history = {}
 M.filter = "I"
 
 local alert = require("anvim.status-alert")
@@ -15,36 +15,71 @@ local levels = {
   W = "WARN", E = "ERROR", F = "FATAL",
 }
 
+local function cfg_logcat()
+  local ok, c = pcall(function() return require("anvim.config").get() end)
+  local l = ok and c and c.logcat or {}
+  local max = l.max_lines or vim.g.anvim_logcat_max or 5000
+  local no_dash = l.no_dashboard_on_close
+  if no_dash == nil then no_dash = true end
+  return { max_lines = max, no_dashboard_on_close = no_dash, filter_default = l.filter_default or "I" }
+end
+
+local function build_cmd(filter)
+  local cmd = { "adb" }
+  local ok, dev = pcall(require, "anvim.devices")
+  if ok and dev and dev.get_active then
+    local id = dev.get_active()
+    if id and id ~= "" then
+      vim.list_extend(cmd, { "-s", id })
+    end
+  end
+  vim.list_extend(cmd, { "logcat", "-v", "time", "*:" .. (filter or "I") })
+  return cmd
+end
+
+M._build_cmd = build_cmd
+
+local function trim_history()
+  local max = cfg_logcat().max_lines
+  while #M.history > max do
+    table.remove(M.history, 1)
+  end
+end
+
 local function start_logcat(buf, filter)
   if vim.fn.executable("adb") == 0 then
     M.running = false
     return
   end
-  local cmd = { "adb", "logcat", "-v", "time", "-s", levels[filter] or "I", "*:" .. (filter or "I") }
+  local cmd = build_cmd(filter)
 
-  M.job_id = vim.fn.jobstart(cmd, {
+  local job = vim.fn.jobstart(cmd, {
     stdout_buffered = false,
-    on_stdout = function(_, data)
+    on_stdout = vim.schedule_wrap(function(_, data)
       if not M.running then return end
       if not data then return end
-      local valid_buf = buf and vim.api.nvim_buf_is_valid(buf)
+      local new_lines = {}
       for _, line in ipairs(data) do
         if line ~= "" then
           table.insert(M.history, line)
-          if valid_buf then
-            pcall(function() vim.bo[buf].modifiable = true end)
-            local last = vim.api.nvim_buf_line_count(buf)
-            vim.api.nvim_buf_set_lines(buf, last, last, false, { line })
-            local max = vim.g.anvim_logcat_max or 5000
-            local count = vim.api.nvim_buf_line_count(buf)
-            if count > max + 100 then
-              vim.api.nvim_buf_set_lines(buf, 0, count - max, false, {})
-            end
-            pcall(function() vim.bo[buf].modifiable = false end)
-          end
+          table.insert(new_lines, line)
         end
       end
-    end,
+      trim_history()
+      if #new_lines > 0 and buf and vim.api.nvim_buf_is_valid(buf) then
+        pcall(function()
+          vim.bo[buf].modifiable = true
+          local last = vim.api.nvim_buf_line_count(buf)
+          vim.api.nvim_buf_set_lines(buf, last, last, false, new_lines)
+          local max = cfg_logcat().max_lines
+          local count = vim.api.nvim_buf_line_count(buf)
+          if count > max + 100 then
+            vim.api.nvim_buf_set_lines(buf, 0, count - max, false, {})
+          end
+          vim.bo[buf].modifiable = false
+        end)
+      end
+    end),
     on_stderr = function(_, data)
       if data and #data > 0 and data[1] ~= "" then
         alert.warn("logcat: " .. table.concat(data, " "))
@@ -55,6 +90,13 @@ local function start_logcat(buf, filter)
       M.job_id = nil
     end,
   })
+  if job == nil or job <= 0 then
+    M.running = false
+    M.job_id = nil
+    alert.error("logcat", "jobstart gagal: " .. table.concat(cmd, " "))
+    return
+  end
+  M.job_id = job
 end
 
 local function setup_keymaps(buf)
@@ -67,10 +109,10 @@ local function setup_keymaps(buf)
     M.close_win()
   end, { buffer = buf, nowait = true, silent = true, desc = "Close logcat" })
   for k, _ in pairs(levels) do
-    vim.keymap.set("n", k, function() M.restart(k) end,
-      { buffer = buf, nowait = true, silent = true, desc = "Filter " .. levels[k] })
+    local key = k
+    vim.keymap.set("n", key, function() M.restart(key) end,
+      { buffer = buf, nowait = true, silent = true, desc = "Filter " .. levels[key] })
   end
-  vim.keymap.set("n", "/", "/", { buffer = buf, nowait = true, silent = false })
 end
 
 function M.open(filter)
@@ -80,11 +122,10 @@ function M.open(filter)
       return
     end
 
-    filter = filter or "I"
+    filter = filter or cfg_logcat().filter_default or "I"
     M.filter = filter
 
     if M.running then
-      -- bring existing window front
       if M.win and vim.api.nvim_win_is_valid(M.win) then
         vim.api.nvim_set_current_win(M.win)
       end
@@ -99,18 +140,21 @@ function M.open(filter)
       vim.bo[buf].bufhidden = "hide"
       vim.bo[buf].filetype = "logcat"
 
-      -- restore history
       if #M.history > 0 then
+        trim_history()
         vim.bo[buf].modifiable = true
         vim.api.nvim_buf_set_lines(buf, 0, -1, false, M.history)
         vim.bo[buf].modifiable = false
       end
     end
 
+    local cols = vim.o.columns or 80
+    local lines_n = vim.o.lines or 24
     local win = vim.api.nvim_open_win(buf, true, {
-      relative = "editor", width = math.floor(vim.o.columns * 0.9),
-      height = math.floor(vim.o.lines * 0.7), col = math.floor(vim.o.columns * 0.05),
-      row = math.floor(vim.o.lines * 0.1), style = "minimal", border = "rounded",
+      relative = "editor", width = math.floor(cols * 0.9),
+      height = math.floor(lines_n * 0.7), col = math.floor(cols * 0.05),
+      row = math.floor(lines_n * 0.1), style = "minimal", border = "rounded",
+      title = " logcat *:" .. M.filter .. " ", title_pos = "center",
     })
     M.win = win
     vim.wo[win].wrap = false
@@ -118,14 +162,19 @@ function M.open(filter)
     setup_keymaps(buf)
     M.running = true
     start_logcat(buf, filter)
-    alert.info("Logcat | V/D/I/W/E/F filter, / search, q quit")
+    if M.running then
+      alert.info("Logcat | V/D/I/W/E/F filter, / search, q quit")
+    end
   end)
   if not ok then alert.error("logcat", err) end
 end
 
 function M.restart(filter)
   M.stop()
-  -- keep buf alive with history
+  if M.win and vim.api.nvim_win_is_valid(M.win) then
+    pcall(vim.api.nvim_win_close, M.win, true)
+  end
+  M.win = nil
   M.open(filter)
 end
 
@@ -138,14 +187,15 @@ function M.stop()
 end
 
 function M.close_win()
-  -- close window, keep buf (hidden) + history, reopen dashboard
   if M.win and vim.api.nvim_win_is_valid(M.win) then
-    vim.api.nvim_win_close(M.win, true)
+    pcall(vim.api.nvim_win_close, M.win, true)
   end
   M.win = nil
-  vim.schedule(function()
-    pcall(require("anvim.dashboard").open)
-  end)
+  if not cfg_logcat().no_dashboard_on_close then
+    vim.schedule(function()
+      pcall(require("anvim.dashboard").open)
+    end)
+  end
 end
 
 return M

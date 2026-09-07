@@ -17,13 +17,15 @@ CONTENTS                                     *anvim*
 anvim is a TUI dashboard for Android and Flutter development inside Neovim.
 It provides an interactive keyboard-driven interface for running tasks,
 viewing logcat, and managing devices — eliminating the need for Android Studio.
+Version 0.3.0.
 
 Features:
-  - Project auto-detection (Flutter vs Android/Gradle)
-  - System health check (ADB, Java, Flutter, Git)
-  - Task runner (build, clean, run)
-  - Logcat viewer with live filtering
-  - Device management (list, select active device)
+  - Project auto-detection (Flutter vs Android/Gradle, git-root aware)
+  - System health check (ADB, Java, Flutter, Git, Gradle + version)
+  - Tool auto-download (sha256 strict, no-sudo ~/.local/bin)
+  - Task runner (build, clean, run, timeout, split + quickfix)
+  - Logcat viewer with live filtering (*:LEVEL)
+  - Device management (multi-device -s, unauthorized/offline warning)
 
 ==============================================================================
 2. INSTALLATION                                    *anvim-installation*
@@ -44,12 +46,16 @@ Using packer.nvim:
   }
 <
 
+Downloaded tools live in ~/.anvim/tools/<name>/,
+binaries are copied to ~/.local/bin/ (no sudo).
+
 ==============================================================================
 3. COMMANDS                                        *anvim-commands*
 
   :Anvim           Open the anvim dashboard
   :AnvimCheck      Run system health check
   :AnvimLogcat     Open logcat viewer
+  :AnvimRun        Run app directly
 
 ==============================================================================
 4. KEYMAPS                                          *anvim-keymaps*
@@ -59,17 +65,18 @@ Default:
   <leader>al       Open logcat
 
 Dashboard navigation:
-  j / k            Navigate up/down
+  j / k            Navigate up/down (skips headers)
   Enter            Select item
   q / Esc          Close dashboard
   c                Run health check
   r                Run app
   l                Open logcat
+  x                Cancel running task
 
 Logcat viewer:
   V / D / I / W / E / F   Filter by log level
   /                       Search within logs
-  q / Esc                 Close
+  q / Esc                 Close (back to code)
 
 ==============================================================================
 5. CONFIGURATION                                  *anvim-configuration*
@@ -83,11 +90,18 @@ Logcat viewer:
     },
     health_check = {
       auto = true,
-      tools = { "adb", "java", "git" },
+      tools = { "adb", "java", "git", "flutter", "gradle" },
     },
     logcat = {
       max_lines = 5000,
       filter_default = "I",
+      no_dashboard_on_close = true,
+    },
+    tasks = {
+      timeout_ms = 300000,
+    },
+    install = {
+      strict_sha256 = true,
     },
   })
 <
@@ -102,6 +116,7 @@ anvim checks for these tools on startup:
   - Java         Java runtime (Gradle builds)
   - Flutter      Flutter SDK (Flutter projects)
   - Git          Version control
+  - Gradle       Build tool Android
 
 Missing tools show a clear message with install instructions.
 Use :AnvimCheck anytime to re-run the health check.

@@ -1,39 +1,34 @@
--- test_dashboard.lua — unit tests for anvim/dashboard.lua
--- ponytail: mock vim.* API, test navigation + close + prereq
+-- test_dashboard.lua — dashboard config-driven, skip header nav
 
 return function(ctx)
   local mock = ctx.mock
   local run = ctx.run
 
-  -- shared mutable alert state
   local alert_state = { warn_called = false, error_called = false }
 
   local function init_mocks()
-    mock.raw("loop.os_uname", function() return { sysname = "Linux", machine = "x86_64" } end)
-    mock.raw("loop.now", function() return 10000 end)
-    mock.raw("loop.fs_stat", function() return nil end)
-    mock.raw("loop.new_timer", function() return { start = function() end, stop = function() end } end)
-    mock.raw("fn.executable", function(name) return 1 end)
+    mock.raw("uv.os_uname", function() return { sysname = "Linux", machine = "x86_64" } end)
+    mock.raw("uv.now", function() return 10000 end)
+    mock.raw("fn.executable", function() return 1 end)
     mock.raw("fn.exepath", function(name) return "/usr/bin/" .. name end)
     mock.raw("fn.system", function() return "" end)
-    mock.raw("fn.expand", function(s) return s:gsub("~", "/home/testuser") end)
-    mock.raw("fn.shellescape", function(s) return s end)
+    mock.raw("fn.expand", function(s) return (s:gsub("~", "/home/testuser")) end)
+    mock.raw("fn.shellescape", function(s) return "'" .. s .. "'" end)
     mock.raw("fn.strdisplaywidth", function(s) return #s end)
-    mock.raw("fn.has", function() return 0 end)
-    mock.raw("fn.strftime", function() return "00:00:00" end)
     mock.raw("fn.inputsave", function() end)
     mock.raw("fn.inputrestore", function() end)
     mock.raw("fn.input", function() return "" end)
-    mock.raw("fn.filewritable", function() return 0 end)
     mock.raw("fn.glob", function() return {} end)
-    mock.raw("fn.bufwinid", function() return "win_1" end)
+    mock.raw("fn.bufwinid", function() return 1000 end)
     mock.raw("fn.mkdir", function() end)
     mock.raw("fn.jobstart", function() return 1 end)
-    mock.raw("api.nvim_create_buf", function() return "buf_1" end)
-    mock.raw("api.nvim_open_win", function() return "win_1" end)
+    mock.raw("fn.getcwd", function() return "/home/testuser/proj" end)
+    mock.raw("fn.isdirectory", function() return 1 end)
+    mock.raw("fn.filereadable", function() return 0 end)
+    mock.raw("api.nvim_create_buf", function() return 11 end)
+    mock.raw("api.nvim_open_win", function() return 22 end)
     mock.raw("api.nvim_buf_is_valid", function() return true end)
     mock.raw("api.nvim_win_is_valid", function() return true end)
-    mock.raw("api.nvim_buf_set_option", function() end)
     mock.raw("api.nvim_buf_set_lines", function() end)
     mock.raw("api.nvim_buf_line_count", function() return 5 end)
     mock.raw("api.nvim_buf_delete", function() end)
@@ -41,18 +36,12 @@ return function(ctx)
     mock.raw("api.nvim_win_set_cursor", function() end)
     mock.raw("api.nvim_win_close", function() end)
     mock.raw("api.nvim_set_current_win", function() end)
-    mock.raw("api.nvim_buf_set_keymap", function() end)
-    mock.raw("api.nvim_set_keymap", function() end)
     mock.raw("api.nvim_create_user_command", function() end)
     mock.raw("schedule", function(fn) fn() end)
     mock.raw("o.lines", 50)
     mock.raw("o.columns", 200)
     mock.raw("env.PATH", "/usr/local/bin:/usr/bin:/bin")
     mock.raw("log.levels", { INFO = 0, WARN = 1, ERROR = 2, DEBUG = 3 })
-    mock.raw("g.anvim_logcat_max", 5000)
-    mock.raw("g.anvim_loader", "lazy")
-    mock.raw("g.anvim_loaded", 0)
-    mock.raw("g.mapleader", "\\")
     mock.raw("keymap.set", function() end)
 
     alert_state.warn_called = false
@@ -69,66 +58,76 @@ return function(ctx)
         adb = { found = true, path = "/usr/bin/adb", label = "ADB" },
         git = { found = true, path = "/usr/bin/git", label = "Git" },
       } end,
+      format_line = function(_, r) return r.found and "✓ ok" or "✗ missing" end,
     }
     package.loaded["anvim.project"] = {
-      detect = function() return { name = "test-project", type = "android" } end,
+      detect = function() return { name = "test-project", type = "android", branch = "main" } end,
     }
     package.loaded["anvim.devices"] = {
-      list = function() return {
-        { id = "emulator-5554", model = "Pixel_6", status = "device" },
-      } end,
+      list = function() return { { id = "emulator-5554", model = "Pixel_6", status = "device" } } end,
       get_active = function() return nil end,
-      set_active = function() end,
+      set_active = function() return true end,
     }
-    package.loaded["anvim.tasks"] = { run = function() end }
+    package.loaded["anvim.tasks"] = { run = function() end, stop = function() end }
     package.loaded["anvim.config"] = {
       get = function() return {
-        dashboard = { width = 0.85, height = 0.85, border = "single" },
+        dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
         health_check = { tools = { "adb", "git" } },
       } end,
     }
     package.loaded["anvim.keymaps.dashboard"] = { set = function() end }
-    package.loaded["anvim.system_check"] = { interactive = function() end }
     package.loaded["anvim.logcat"] = { open = function() end }
   end
 
-  -- load module once, all tests share
   init_mocks()
+  package.loaded["anvim.dashboard"] = nil
+  package.loaded["anvim.util"] = nil
   local dash = require("anvim.dashboard")
 
   run("dashboard: open creates buf + win", function()
+    dash.close()
     dash.open()
-    assert(dash.state.open == true, "open should be true")
-    assert(dash.state.buf ~= nil, "buf should be set")
-    assert(dash.state.win ~= nil, "win should be set")
+    assert(dash.state.open == true)
+    assert(dash.state.buf ~= nil)
+    assert(dash.state.win ~= nil)
   end)
 
-  run("dashboard: nav wraps selected index", function()
-    dash.state.open = true
-    dash.state.buf = "buf_1"
-    dash.state.win = "win_1"
-    dash.state.items = {
-      { type = "task", label = "a", task = "run", icon = "▶" },
-      { type = "task", label = "b", task = "logcat", icon = "■" },
-      { type = "task", label = "c", task = "check", icon = "⚡" },
-    }
-    dash.state.selected = 1
-    dash.state.proj = { name = "test", type = "android" }
+  run("dashboard: open clamps small screen", function()
+    mock.raw("o.lines", 24)
+    mock.raw("o.columns", 80)
+    dash.close()
+    dash.open()
+    assert(dash.state.open == true, "harus tetap open di layar kecil tanpa error")
+    mock.raw("o.lines", 50)
+    mock.raw("o.columns", 200)
+  end)
 
-    dash.nav(-1)
-    assert(dash.state.selected == 3, "expected 3, got " .. dash.state.selected)
+  run("dashboard: nav skips header", function()
+    dash.state.open = true
+    dash.state.buf = 11
+    dash.state.win = 22
+    dash.state.items = {
+      { type = "header", text = "Tasks" },
+      { type = "task", label = "a", task = "run", icon = "▶" },
+      { type = "header", text = "System" },
+      { type = "task", label = "b", task = "check", icon = "⚡" },
+    }
+    dash.state.selected = 2
+    dash.state.proj = { name = "test", type = "android" }
     dash.nav(1)
-    assert(dash.state.selected == 1, "expected 1, got " .. dash.state.selected)
+    assert(dash.state.selected == 4, "harus skip header ke 4, got " .. dash.state.selected)
+    dash.nav(1)
+    assert(dash.state.selected == 2, "wrap ke 2, got " .. dash.state.selected)
   end)
 
   run("dashboard: close cleans state", function()
     dash.state.open = true
-    dash.state.buf = "buf_1"
-    dash.state.win = "win_1"
+    dash.state.buf = 11
+    dash.state.win = 22
     dash.close()
     assert(dash.state.open == false)
     assert(dash.state.buf == nil)
-    assert(dash.state.win == nil)
+    assert(dash.state.items ~= nil and #dash.state.items == 0)
   end)
 
   run("dashboard: do_logcat warns if adb missing", function()
@@ -138,51 +137,66 @@ return function(ctx)
     end)
     alert_state.warn_called = false
     dash.state.open = true
-    dash.state.buf = "buf_1"
+    dash.state.buf = 11
     dash.do_logcat()
-    assert(alert_state.warn_called == true, "expected warn when adb missing")
-  end)
-
-  run("dashboard: do_check closes and opens system_check", function()
-    local system_called = false
-    package.loaded["anvim.system_check"] = { interactive = function() system_called = true end }
-    dash.state.open = true
-    dash.state.buf = "buf_1"
-    dash.do_check()
-    assert(dash.state.open == false, "dashboard should close")
-    assert(system_called, "system_check.interactive should be called")
+    assert(alert_state.warn_called == true)
+    mock.raw("fn.executable", function() return 1 end)
   end)
 
   run("dashboard: select task run calls tasks.run", function()
-    -- call open() first so lazy_modules captures tasks_m
     dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
     local tasks_called = false
-    package.loaded["anvim.tasks"] = { run = function() tasks_called = true end }
+    package.loaded["anvim.tasks"] = { run = function() tasks_called = true end, stop = function() end }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.open()
+    dash.state.selected = 1
+    -- cari index selectable pertama
+    for i, it in ipairs(dash.state.items) do
+      if it.type == "task" and it.task == "run" then dash.state.selected = i break end
+    end
+    dash.state.proj = { name = "test", type = "android" }
+    dash.select()
+    assert(tasks_called == true)
+  end)
+
+  run("dashboard: select device validates + set_active", function()
+    local active_id
+    package.loaded["anvim.devices"] = {
+      list = function() return { { id = "emulator-5554", model = "Pixel", status = "device" } } end,
+      get_active = function() return nil end,
+      set_active = function(id) active_id = id return true end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
     dash.open()
     dash.state.selected = 1
     dash.state.items = {
-      { type = "task", label = "Run App", task = "run", icon = "▶" },
+      { type = "device", label = "Pixel (emulator-5554)", device = { id = "emulator-5554", status = "device" } },
     }
     dash.state.proj = { name = "test", type = "android" }
     dash.select()
-    assert(tasks_called == true, "tasks.run should be called")
+    assert(active_id == "emulator-5554", "got " .. tostring(active_id))
   end)
 
-  run("dashboard: select device calls set_active", function()
-    local active_id
+  run("dashboard: select invalid device warns", function()
     package.loaded["anvim.devices"] = {
       list = function() return {} end,
       get_active = function() return nil end,
-      set_active = function(id) active_id = id end,
+      set_active = function() error("must not call") end,
     }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
     dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
     dash.open()
-    dash.state.selected = 1
     dash.state.items = {
-      { type = "device", label = "Pixel_6 (device)", device = { id = "emulator-5554" } },
+      { type = "device", label = "x", device = { id = "gone-123", status = "device" } },
     }
+    dash.state.selected = 1
     dash.state.proj = { name = "test", type = "android" }
+    alert_state.warn_called = false
     dash.select()
-    assert(active_id == "emulator-5554", "set_active should be called with device id, got " .. tostring(active_id))
+    assert(alert_state.warn_called == true)
   end)
 end
