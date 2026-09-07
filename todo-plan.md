@@ -45,7 +45,9 @@
 - [x] TOOLS scrcpy v4.1 (linux x64/macos arm+intel/win64, `no_deploy`, SHA256SUMS per-file, ARM64 fallback manual)
 - [x] `scrcpy.lua`: find tools-dir, flags full-custom (size/bitrate/audio/record), launch/stop per-device
 - [x] Dashboard section Scrcpy gantikan Emulator (toggle `replace_emulator`), key `m`, `:AnvimScrcpy[KILL]`
-- [x] Tests 116 pass (17 suites)
+- [x] Dashboard instant open: fase cepat + susulan async, cache flutter/emulator, hint loading
+- [x] Scrcpy discoverability: optional-installable buka UI check, hint dashboard, pick fallback ke check
+- [x] Tests 121 pass (17 suites)
 
 ## Fase 4 — Pre-release (DONE, v1.0.0)
 - [x] Dashboard cursor lock vertikal (h/l/arrows Nop + CursorMoved snap, gg/G)

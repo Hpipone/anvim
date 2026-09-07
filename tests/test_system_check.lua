@@ -171,4 +171,29 @@ return function(ctx)
     sc.doctor()
     assert(true)
   end)
+
+  run("system_check: UI tetap buka untuk optional installable", function()
+    setup()
+    -- semua wajib ada, scrcpy (optional) hilang tapi bisa di-download
+    mock.raw("fn.executable", function(p)
+      if tostring(p):find("scrcpy") then return 0 end
+      return 1
+    end)
+    mock.raw("fn.exepath", function(name)
+      if name == "scrcpy" then return "" end
+      return "/usr/bin/" .. name
+    end)
+    mock.raw("fn.glob", function() return {} end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    sc.interactive()
+    assert(sc._ui.buf ~= nil, "UI harus buka untuk tawarkan scrcpy")
+    local found = false
+    for _, it in ipairs(sc._ui.items) do
+      if it.name == "scrcpy" and it.kind == "installable" then found = true end
+    end
+    assert(found == true, "scrcpy harus installable")
+    sc._ui_close()
+  end)
 end

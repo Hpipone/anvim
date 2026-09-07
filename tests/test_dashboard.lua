@@ -385,4 +385,39 @@ return function(ctx)
     dash.open()
     assert(alert_state.warn_called == true, "auto health harus warn")
   end)
+
+  run("dashboard: open tahan walau section lambat error", function()
+    package.loaded["anvim.emulator"] = {
+      list_avds = function() error("boom") end,
+      running_map = function() error("boom") end,
+    }
+    package.loaded["anvim.flutter"] = {
+      list = function() error("boom") end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    assert(dash.state.open == true, "dashboard harus tetap terbuka")
+    dash.close()
+  end)
+
+  run("dashboard: hint scrcpy bila belum install", function()
+    package.loaded["anvim.devices"] = {
+      list = function() return { { id = "RF123", model = "Pixel", status = "device" } } end,
+      get_active = function() return nil end,
+      set_active = function() return true end,
+    }
+    package.loaded["anvim.scrcpy"] = { find_binary = function() return nil end }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    local hint = false
+    for _, it in ipairs(dash.state.items) do
+      if it.type == "hint" and tostring(it.text):find("scrcpy") then hint = true end
+    end
+    assert(hint == true, "hint install scrcpy harus ada")
+    dash.close()
+  end)
 end

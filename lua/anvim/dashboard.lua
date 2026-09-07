@@ -86,7 +86,7 @@ local function diag_line(proj)
 end
 
 -- ── content builder ──
-local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_info, show_emulators)
+local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_info, show_emulators, scrcpy_hint)
   local items = {}
   table.insert(items, { type = "header", text = "Tasks" })
   table.insert(items, { type = "task", label = "Run App", task = "run", icon = "▶" })
@@ -121,10 +121,14 @@ local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_in
       end
     end
     table.insert(items, { type = "task", label = "Scrcpy… (mirror/record/stop)", task = "scrcpy", icon = "◉" })
+  elseif scrcpy_hint then
+    table.insert(items, { type = "hint", text = "(scrcpy: mirror HP — c → check untuk install)" })
   end
   if show_emulators ~= false then
     table.insert(items, { type = "header", text = "Emulators" })
-    if avd_info and #avd_info > 0 then
+    if avd_info and avd_info.loading then
+      table.insert(items, { type = "hint", text = "(loading…)" })
+    elseif avd_info and #avd_info > 0 then
       for _, a in ipairs(avd_info) do
         if a.running_id then
           local is_active = devices_m and a.running_id == devices_m.get_active()
@@ -269,16 +273,17 @@ local function current_geom()
   return util.float_geom(d.width, d.height, d.min_width, d.min_height)
 end
 
-local function refresh_state()
+local function refresh_state(slow)
+  if slow == nil then slow = true end
   local proj = project_m.detect()
   local dev_list = devices_m.list()
   local tools = { "adb", "java", "git", "flutter", "gradle" }
   local ok_c, c = pcall(function() return require("anvim.config").get() end)
   if ok_c and c and c.health_check and c.health_check.tools then tools = c.health_check.tools end
   local h_results = syscheck_m.check_all(tools)
-  -- AVD info: best-effort, jangan bikin dashboard lambat/crash
+  -- AVD info: lambat (spawn emulator binary + adb per device) → fase slow saja
   local avd_info = {}
-  if emulator_m then
+  if slow and emulator_m then
     local ok_e, avds = pcall(emulator_m.list_avds)
     if ok_e and avds then
       local rmap = {}
@@ -287,15 +292,18 @@ local function refresh_state()
         table.insert(avd_info, { name = name, running_id = rmap[name] })
       end
     end
+  elseif emulator_m then
+    avd_info = { loading = true }
   end
-  -- Flutter targets: hanya untuk project flutter, best-effort
+  -- Flutter targets: `flutter devices` lambat (detik) → fase slow saja
   local fdevs = {}
-  if flutter_m and proj.type == "flutter" then
+  if slow and flutter_m and proj.type == "flutter" then
     pcall(function() fdevs = flutter_m.list() or {} end)
   end
   -- Scrcpy: gantikan emulator bila ada + replace_emulator (default true)
   local scrcpy_info = {}
   local show_emulators = true
+  local scrcpy_hint = false
   if scrcpy_m then
     local found = false
     pcall(function() found = scrcpy_m.find_binary() ~= nil end)
@@ -315,9 +323,14 @@ local function refresh_state()
         end
       end)
       show_emulators = not rep
+    else
+      -- scrcpy belum install tapi ada device online → kasih petunjuk
+      for _, d in ipairs(dev_list) do
+        if d.status == "device" then scrcpy_hint = true break end
+      end
     end
   end
-  M.state.items = build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_info, show_emulators)
+  M.state.items = build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_info, show_emulators, scrcpy_hint)
   M.state.proj = proj
   if not is_selectable(M.state.items[M.state.selected]) then
     M.state.selected = first_selectable(M.state.items)
@@ -354,10 +367,24 @@ function M.open()
     M.state.buf = buf
     M.state.win = win
 
-    local proj = refresh_state()
+    -- fase cepat: tanpa section lambat → window langsung tampil
+    local proj = refresh_state(false)
     M.state.selected = first_selectable(M.state.items)
     render(buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
     require("anvim.keymaps.dashboard").set(buf)
+    -- fase lambat (emulator/flutter): susulkan tanpa blokir open
+    local open_buf, open_win = buf, win
+    vim.schedule(function()
+      if not M.state.open or M.state.buf ~= open_buf or M.state.win ~= open_win then return end
+      local ok2, proj2 = pcall(refresh_state, true)
+      if not ok2 then return end
+      if not M.state.open or M.state.buf ~= open_buf then return end
+      if not is_selectable(M.state.items[M.state.selected]) then
+        M.state.selected = first_selectable(M.state.items)
+      end
+      local w2, h2 = current_geom()
+      render(open_buf, M.state.items, M.state.selected, proj2, devices_m.get_active(), h2, w2)
+    end)
     -- kunci cursor: snap balik ke baris selected (hanya navigasi atas/bawah)
     pcall(vim.api.nvim_create_augroup, "AnvimDashboard", { clear = true })
     pcall(vim.api.nvim_create_autocmd, "CursorMoved", {

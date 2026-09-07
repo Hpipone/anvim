@@ -6,15 +6,15 @@
 
 ## Features
 
-- **Dashboard** — floating window, keyboard-only (`j/k`, no horizontal drift), LSP diagnostics, auto health warnings
-- **System check** — detects ADB, Java, Flutter, Git, Gradle (+Emulator), enforces minimum versions, one-key auto-install
+- **Dashboard** — floating window, keyboard-only (`j/k`, no horizontal drift), LSP diagnostics, auto health warnings, instant open (slow sections load async)
+- **System check** — detects ADB, Java, Flutter, Git, Gradle (+Emulator, +Scrcpy), enforces minimum versions, one-key auto-install (optional tools offered too)
 - **Detection** — canonical `~/.local/bin` first, then PATH, SDK paths, `ANDROID_HOME`, then your folders (`~/Downloads`, `~/Documents`, `detect.extra_dirs`)
 - **Installer** — download → checksum → extract → symlink into `~/.local/bin`, no sudo, multi-shell PATH; `:AnvimCheck` auto-repairs old installs
 - **Tasks** — run / clean / build / test / custom, timeout + cancel, split output + quickfix
 - **Logcat** — live view, level/tag filters, save to file, clipboard copy
 - **Devices** — multi-device select (`-s` everywhere, `ANDROID_SERIAL` for Gradle), offline/unauthorized warnings, persistent active device
 - **Emulator** — list AVDs, launch (cold/quick/wipe), kill, boot wait + auto-select
-- **Scrcpy** — mirror + control phone per device, record to `~/Videos`, custom flags; replaces emulator section when installed
+- **Scrcpy** — mirror + control phone per device, record to `~/Videos`, custom flags; replaces emulator section when installed (install via `:AnvimCheck`)
 
 ## Requirements
 
@@ -94,7 +94,7 @@ Custom tasks appear in the dashboard (★). Theming via `AnvimTitle/Header/Selec
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 116 unit tests, no framework
+nvim --headless -l tests/run.lua   # 121 unit tests, no framework
 ```
 
 ## Roadmap

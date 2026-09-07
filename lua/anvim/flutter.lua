@@ -32,11 +32,21 @@ function M._parse_machine(out)
 end
 
 --- List flutter devices (kosong jika flutter hilang / gagal).
+--- Di-cache 30 detik karena `flutter devices` lambat (startup detik).
+M._cache = { at = nil, data = {} }
+
 function M.list()
-  if vim.fn.executable("flutter") == 0 then return {} end
-  local ok, out = pcall(vim.fn.system, "flutter devices --machine 2>/dev/null")
-  if not ok or not out then return {} end
-  return M._parse_machine(out)
+  local now = vim.uv.now()
+  if M._cache.at and now - M._cache.at < 30000 and M._cache.data then
+    return M._cache.data
+  end
+  local devs = {}
+  if vim.fn.executable("flutter") == 1 then
+    local ok, out = pcall(vim.fn.system, "flutter devices --machine 2>/dev/null")
+    if ok and out then devs = M._parse_machine(out) end
+  end
+  M._cache = { at = now, data = devs }
+  return devs
 end
 
 return M

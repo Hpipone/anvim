@@ -111,6 +111,18 @@ return function(ctx)
     assert(map["Pixel_6_API_34"] == "emulator-5554")
   end)
 
+  run("emulator: list_avds di-cache (spawn sekali)", function()
+    setup()
+    local n = 0
+    mock.raw("fn.system", function() n = n + 1 return "Pixel_6\n" end)
+    package.loaded["anvim.emulator"] = nil
+    package.loaded["anvim.util"] = nil
+    local emu = require("anvim.emulator")
+    emu.list_avds()
+    emu.list_avds()
+    assert(n == 1, "harus 1 spawn, got " .. n)
+  end)
+
   run("emulator: kill tanpa id gagal", function()
     setup()
     package.loaded["anvim.emulator"] = nil

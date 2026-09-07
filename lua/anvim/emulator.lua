@@ -53,20 +53,39 @@ function M._parse_avds(out)
 end
 
 --- List AVD terinstall. Return {names} (kosong jika binary hilang).
+--- Di-cache 30 detik (spawn emulator binary tidak instan).
+M._avd_cache = { at = nil, data = {} }
+
 function M.list_avds()
+  local now = vim.uv.now()
+  if M._avd_cache.at and now - M._avd_cache.at < 30000 and M._avd_cache.data then
+    return M._avd_cache.data
+  end
+  local names = {}
   local bin = M.find_binary()
-  if not bin then return {} end
-  local ok, out = pcall(vim.fn.system, util.esc(bin) .. " -list-avds 2>/dev/null")
-  if not ok or not out then return {} end
-  return M._parse_avds(out)
+  if bin then
+    local ok, out = pcall(vim.fn.system, util.esc(bin) .. " -list-avds 2>/dev/null")
+    if ok and out then names = M._parse_avds(out) end
+  end
+  M._avd_cache = { at = now, data = names }
+  return names
 end
 
 --- Map AVD name → device id untuk emulator yang sedang jalan.
---- Query `adb -s <id> emu avd name` per device emulator-*.
+--- Query `adb -s <id> emu avd name` per device emulator-* (cache 10 detik).
+M._rmap_cache = { at = nil, key = "", map = {} }
+
 function M.running_map(dev_list)
   local map = {}
   if vim.fn.executable("adb") == 0 then return map end
   dev_list = dev_list or {}
+  local key_parts = {}
+  for _, d in ipairs(dev_list) do table.insert(key_parts, d.id .. "=" .. d.status) end
+  local key = table.concat(key_parts, ",")
+  local now = vim.uv.now()
+  if M._rmap_cache.at and now - M._rmap_cache.at < 10000 and M._rmap_cache.key == key then
+    return M._rmap_cache.map
+  end
   for _, d in ipairs(dev_list) do
     if d.id:match("^emulator%-") and d.status == "device" then
       local ok, out = pcall(vim.fn.system, "adb -s " .. util.esc(d.id) .. " emu avd name 2>/dev/null")
@@ -80,6 +99,7 @@ function M.running_map(dev_list)
       end
     end
   end
+  M._rmap_cache = { at = vim.uv.now(), key = key, map = map }
   return map
 end
 

@@ -676,7 +676,13 @@ function M.interactive()
 
   local missing = M.get_missing()
   local outdated = M.get_outdated()
-  if #missing == 0 and #outdated == 0 then
+  -- optional yang belum install tapi bisa di-download (mis. scrcpy)
+  -- tetap tampilkan UI agar bisa di-install, bukan "ALL GOOD" buta
+  local installable = 0
+  for _, it in ipairs(M._ui.items) do
+    if it.kind == "installable" then installable = installable + 1 end
+  end
+  if #missing == 0 and #outdated == 0 and installable == 0 then
     if #repaired > 0 then
       alert.ok("All tools detected (" .. table.concat(repaired, "; ") .. ")")
     else

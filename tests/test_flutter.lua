@@ -33,4 +33,15 @@ return function(ctx)
     local f = require("anvim.flutter")
     assert(#f.list() == 0)
   end)
+
+  run("flutter: list di-cache (spawn sekali)", function()
+    local n = 0
+    mock.raw("fn.executable", function() return 1 end)
+    mock.raw("fn.system", function() n = n + 1 return "" end)
+    package.loaded["anvim.flutter"] = nil
+    local f = require("anvim.flutter")
+    f.list()
+    f.list()
+    assert(n == 1, "harus 1 spawn, got " .. n)
+  end)
 end

@@ -96,7 +96,11 @@ function M.launch(device_id, opts, on_done)
     return
   end
   if not M.find_binary() then
-    alert.warn("Scrcpy tidak ditemukan. Jalankan :AnvimCheck untuk install.")
+    alert.warn("Scrcpy belum install — buka :AnvimCheck untuk install.")
+    vim.schedule(function()
+      local ok, sys = pcall(require, "anvim.system_check")
+      if ok then sys.interactive() end
+    end)
     on_done(false)
     return
   end
