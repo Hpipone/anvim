@@ -122,4 +122,33 @@ return function(ctx)
     t.run_custom({ "ngawur-bin", "--x" }, "x", function(_, ok) ok_v = ok end)
     assert(ok_v == false)
   end)
+
+  run("tasks: rerun false jika belum ada", function()
+    setup()
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    assert(t.rerun() == false)
+  end)
+
+  run("tasks: rerun custom terakhir", function()
+    setup()
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local n = 0
+    t.run_custom({ "echo", "a" }, "ea", function() n = n + 1 end)
+    assert(t.rerun(function() n = n + 1 end) == true)
+    assert(n == 2, "rerun harus jalan lagi, got " .. n)
+  end)
+
+  run("tasks: rerun named detect ulang", function()
+    setup()
+    package.loaded["anvim.project"] = {
+      detect = function() return { type = "flutter", build_tool = "flutter", root = "/tmp/proj" } end,
+    }
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean")
+    assert(t.state.last.task == "clean")
+    assert(t.rerun() == true)
+  end)
 end

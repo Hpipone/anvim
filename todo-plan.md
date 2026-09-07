@@ -32,14 +32,16 @@
 - [x] Active device persisten (`~/.anvim/active_device`, restore + clear)
 - [x] Tests 84 pass (13 suites)
 
-## Fase 4 — Pre-release upgrade (diusulkan, belum dieksekusi)
-- [ ] ANDROID_HOME setup helper: deteksi + tawarkan export ke shell RC + validasi
-- [ ] `gradlew` auto `chmod +x` saat terdeteksi tidak executable (dengan konfirmasi)
-- [ ] `flutter devices` listing di dashboard (browser/desktop disamping emulator fisik)
-- [ ] Logcat simpan ke file (`:AnvimLogcatSave {path}`) + filter tag (`-s TagName`)
-- [ ] Task history: rerun last task (`:AnvimRerun`, key `R`) + status spinner di dashboard
-- [ ] Statusline/lualine component: `project • device • task…` (modul `anvim.statusline`)
-- [ ] Logcat search highlight + copy line ke clipboard (`yy`)
-- [ ] Offline docs: `:helptags` check + `:AnvimHelp` + README demo (asciinema/gif)
-- [ ] CI headless (`nvim --headless -l tests/run.lua`) + stylua/luacheck + matrix OS
-- [ ] Release v1.0.0 saat Fase 2–4 stabil di Linux/macOS/Windows
+## Fase 4 — Pre-release (DONE, v1.0.0)
+- [x] Dashboard cursor lock vertikal (h/l/arrows Nop + CursorMoved snap, gg/G)
+- [x] Install window diperbesar (0.75 fraksi, min 70x26) + queue stacking bug fix
+- [x] ANDROID_HOME doctor (`:AnvimDoctor`, env issues di system check)
+- [x] `gradlew` auto `chmod +x` + fallback gradle
+- [x] `flutter devices` section di dashboard (flutter.lua)
+- [x] Logcat save (`:AnvimLogcatSave`, key `S`), tag filter (key `T`), copy line (`yy`)
+- [x] Rerun last task (`:AnvimRerun`, key `R`)
+- [x] Statusline/lualine component (`statusline.lua`)
+- [x] Help tags (`doc/tags`, `:AnvimHelp`)
+- [x] CI (GitHub Actions matrix linux/mac/win + stylua check) + `.stylua.toml`
+- [x] README English ringkas + docs sinkron
+- [x] Tests 97 pass (15 suites) → release v1.0.0

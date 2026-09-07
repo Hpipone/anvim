@@ -137,4 +137,26 @@ return function(ctx)
     assert(lc.running == false)
     assert(lc.job_id == nil)
   end)
+
+  run("logcat: build_cmd dengan tag", function()
+    local cmd = lc._build_cmd("I", "MyApp")
+    local joined = table.concat(cmd, " ")
+    assert(joined:find("%-s MyApp"), "got " .. joined)
+    assert(joined:find("%*:I"), "got " .. joined)
+  end)
+
+  run("logcat: save tulis history", function()
+    local written
+    mock.raw("fn.writefile", function(lines, path) written = { lines = lines, path = path } return 0 end)
+    mock.raw("fn.expand", function(s) return (s:gsub("~", "/home/testuser")) end)
+    lc.history = { "a", "b" }
+    local path = lc.save("/tmp/x.log")
+    assert(path == "/tmp/x.log")
+    assert(#written.lines == 2)
+  end)
+
+  run("logcat: save tolak history kosong", function()
+    lc.history = {}
+    assert(lc.save("/tmp/x.log") == nil)
+  end)
 end

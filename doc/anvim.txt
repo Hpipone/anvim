@@ -17,13 +17,13 @@ CONTENTS                                     *anvim*
 anvim is a TUI dashboard for Android and Flutter development inside Neovim.
 It provides an interactive keyboard-driven interface for running tasks,
 viewing logcat, and managing devices — eliminating the need for Android Studio.
-Version 0.4.0.
+Version 1.0.0.
 
 Features:
   - Project auto-detection (Flutter vs Android/Gradle, git-root aware)
   - System health check (versions + minimums, selectable UI, auto-download)
   - Tool auto-download (sha256 best-effort, no-sudo ~/.local/bin)
-  - Task runner (build, clean, run, test, custom, split + quickfix)
+  - Task runner (build, clean, run, test, custom, rerun, split + quickfix)
   - Logcat viewer with live filtering (*:LEVEL)
   - Device management (multi-device -s, persistent active device)
   - Emulator manager (list AVD, launch cold/quick/wipe, kill, boot wait)
@@ -60,7 +60,11 @@ binaries are copied to ~/.local/bin/ (no sudo).
   :AnvimLogcat     Open logcat viewer
   :AnvimRun        Run app directly
   :AnvimTest       Run project tests
+  :AnvimRerun      Rerun last task
   :AnvimCustom     Run custom task (picker)
+  :AnvimDoctor     Environment doctor
+  :AnvimLogcatSave [path]  Save logcat history
+  :AnvimHelp       Open this help
   :AnvimEmulator   Launch Android emulator (picker)
   :AnvimEmulatorKill Kill running emulator
 
@@ -75,6 +79,10 @@ Dashboard navigation:
   j / k            Navigate up/down (skips headers)
   Enter            Select item
   q / Esc          Close dashboard
+  R                Rerun last task
+  e                Launch emulator
+  t                Run tests
+  x                Cancel running task
   c                Run health check
   r                Run app
   l                Open logcat
@@ -83,6 +91,9 @@ Dashboard navigation:
 
 Logcat viewer:
   V / D / I / W / E / F   Filter by log level
+  T                       Filter by tag (empty = reset)
+  S                       Save history to file
+  yy                      Copy current line
   /                       Search within logs
   q / Esc                 Close (back to code)
 

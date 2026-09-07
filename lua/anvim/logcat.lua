@@ -7,6 +7,7 @@ M.job_id = nil
 M.running = false
 M.history = {}
 M.filter = "I"
+M.tag = nil
 
 local alert = require("anvim.status-alert")
 
@@ -24,7 +25,7 @@ local function cfg_logcat()
   return { max_lines = max, no_dashboard_on_close = no_dash, filter_default = l.filter_default or "I" }
 end
 
-local function build_cmd(filter)
+local function build_cmd(filter, tag)
   local cmd = { "adb" }
   local ok, dev = pcall(require, "anvim.devices")
   if ok and dev and dev.get_active then
@@ -33,7 +34,11 @@ local function build_cmd(filter)
       vim.list_extend(cmd, { "-s", id })
     end
   end
-  vim.list_extend(cmd, { "logcat", "-v", "time", "*:" .. (filter or "I") })
+  vim.list_extend(cmd, { "logcat", "-v", "time" })
+  if tag and tag ~= "" then
+    vim.list_extend(cmd, { "-s", tag })
+  end
+  vim.list_extend(cmd, { "*:" .. (filter or "I") })
   return cmd
 end
 
@@ -46,12 +51,12 @@ local function trim_history()
   end
 end
 
-local function start_logcat(buf, filter)
+local function start_logcat(buf, filter, tag)
   if vim.fn.executable("adb") == 0 then
     M.running = false
     return
   end
-  local cmd = build_cmd(filter)
+  local cmd = build_cmd(filter, tag)
 
   local job = vim.fn.jobstart(cmd, {
     stdout_buffered = false,
@@ -113,9 +118,26 @@ local function setup_keymaps(buf)
     vim.keymap.set("n", key, function() M.restart(key) end,
       { buffer = buf, nowait = true, silent = true, desc = "Filter " .. levels[key] })
   end
+  -- "/" native (search). Tambahan: yy copy baris, S simpan ke file.
+  vim.keymap.set("n", "yy", function()
+    local ok, line = pcall(vim.api.nvim_get_current_line)
+    if ok and line then
+      vim.fn.setreg("+", line)
+      alert.info("Copied line")
+    end
+  end, { buffer = buf, nowait = true, silent = true, desc = "Copy line" })
+  vim.keymap.set("n", "S", function()
+    M.save()
+  end, { buffer = buf, nowait = true, silent = true, desc = "Save logcat" })
+  vim.keymap.set("n", "T", function()
+    vim.fn.inputsave()
+    local tag = vim.fn.input("Tag filter (kosongkan = reset): ")
+    vim.fn.inputrestore()
+    M.set_tag(tag)
+  end, { buffer = buf, nowait = true, silent = true, desc = "Filter by tag" })
 end
 
-function M.open(filter)
+function M.open(filter, tag)
   local ok, err = pcall(function()
     if vim.fn.executable("adb") == 0 then
       alert.warn("Logcat needs ADB.\nRun :AnvimCheck to install.")
@@ -124,6 +146,7 @@ function M.open(filter)
 
     filter = filter or cfg_logcat().filter_default or "I"
     M.filter = filter
+    if tag ~= nil then M.tag = (tag ~= "" and tag or nil) end
 
     if M.running then
       if M.win and vim.api.nvim_win_is_valid(M.win) then
@@ -136,7 +159,7 @@ function M.open(filter)
     if not buf or not vim.api.nvim_buf_is_valid(buf) then
       buf = vim.api.nvim_create_buf(false, true)
       M.buf = buf
-      vim.api.nvim_buf_set_name(buf, "anvim://logcat")
+      pcall(vim.api.nvim_buf_set_name, buf, "anvim://logcat")
       vim.bo[buf].bufhidden = "hide"
       vim.bo[buf].filetype = "logcat"
 
@@ -150,32 +173,55 @@ function M.open(filter)
 
     local cols = vim.o.columns or 80
     local lines_n = vim.o.lines or 24
+    local title = " logcat *:" .. M.filter .. (M.tag and (" [" .. M.tag .. "]") or "") .. " "
     local win = vim.api.nvim_open_win(buf, true, {
       relative = "editor", width = math.floor(cols * 0.9),
       height = math.floor(lines_n * 0.7), col = math.floor(cols * 0.05),
       row = math.floor(lines_n * 0.1), style = "minimal", border = "rounded",
-      title = " logcat *:" .. M.filter .. " ", title_pos = "center",
+      title = title, title_pos = "center",
     })
     M.win = win
     vim.wo[win].wrap = false
 
     setup_keymaps(buf)
     M.running = true
-    start_logcat(buf, filter)
+    start_logcat(buf, filter, M.tag)
     if M.running then
-      alert.info("Logcat | V/D/I/W/E/F filter, / search, q quit")
+      alert.info("Logcat | V/D/I/W/E/F filter, T tag, S save, yy copy, q quit")
     end
   end)
   if not ok then alert.error("logcat", err) end
 end
 
-function M.restart(filter)
+function M.restart(filter, tag)
+  if tag ~= nil then M.tag = (tag ~= "" and tag or nil) end
   M.stop()
   if M.win and vim.api.nvim_win_is_valid(M.win) then
     pcall(vim.api.nvim_win_close, M.win, true)
   end
   M.win = nil
-  M.open(filter)
+  M.open(filter or M.filter, M.tag)
+end
+
+--- Filter berdasarkan tag (native adb `-s Tag`). Kosongkan untuk reset.
+function M.set_tag(tag)
+  M.restart(nil, tag)
+end
+
+--- Simpan history ke file. Return path atau nil.
+function M.save(path)
+  if #M.history == 0 then
+    alert.warn("Logcat kosong — belum ada yang disimpan.")
+    return nil
+  end
+  path = path or (vim.fn.expand("~/anvim-logcat-" .. os.date("%Y%m%d-%H%M%S") .. ".log"))
+  local ok, err = pcall(vim.fn.writefile, M.history, path)
+  if not ok then
+    alert.error("logcat save", err)
+    return nil
+  end
+  alert.ok("Logcat saved: " .. path .. " (" .. #M.history .. " lines)")
+  return path
 end
 
 function M.stop()

@@ -107,6 +107,8 @@ local suites = {
   "tests.test_health",
   "tests.test_emulator",
   "tests.test_theme",
+  "tests.test_flutter",
+  "tests.test_statusline",
 }
 
 for _, mod in ipairs(suites) do

@@ -281,13 +281,23 @@ return function(ctx)
 
   run("dashboard: do_test runs test task", function()
     local ran
-    package.loaded["anvim.tasks"] = { run = function(_, task) ran = task end, stop = function() end, run_custom = function() end }
+    package.loaded["anvim.tasks"] = { run = function(_, task) ran = task end, stop = function() end, run_custom = function() end, rerun = function() return false end }
     package.loaded["anvim.dashboard"] = nil
     dash = require("anvim.dashboard")
     dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
     dash.open()
     dash.do_test()
     assert(ran == "test", "got " .. tostring(ran))
+  end)
+
+  run("dashboard: do_rerun closes on success", function()
+    package.loaded["anvim.tasks"] = { run = function() end, stop = function() end, run_custom = function() end, rerun = function() return true end }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    dash.do_rerun()
+    assert(dash.state.open == false)
   end)
 
   run("dashboard: auto warn saat tool hilang", function()

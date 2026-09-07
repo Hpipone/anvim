@@ -54,6 +54,10 @@ return function(ctx)
     assert(has("AnvimTest"), "AnvimTest hilang: " .. table.concat(cmds, ","))
     assert(has("AnvimCustom"), "AnvimCustom hilang")
     assert(has("AnvimEmulator"), "AnvimEmulator hilang")
+    assert(has("AnvimRerun"), "AnvimRerun hilang")
+    assert(has("AnvimDoctor"), "AnvimDoctor hilang")
+    assert(has("AnvimLogcatSave"), "AnvimLogcatSave hilang")
+    assert(has("AnvimHelp"), "AnvimHelp hilang")
     vim.g.anvim_no_default_keymaps = nil
   end)
 end

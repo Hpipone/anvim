@@ -328,6 +328,60 @@ function M.format_line(name, r)
   return string.format("✗ %s not found", label)
 end
 
+--- Masalah environment (di luar binary): ANDROID_HOME, emulator, gradlew bit.
+function M.get_env_issues()
+  local issues = {}
+  local ah = vim.env.ANDROID_HOME or vim.env.ANDROID_SDK_ROOT
+  if not ah or ah == "" then
+    table.insert(issues, {
+      label = "ANDROID_HOME belum di-set",
+      hint = 'export ANDROID_HOME="$HOME/Android/Sdk" >> ~/.bashrc (sesuaikan shell)',
+    })
+  elseif vim.fn.isdirectory(vim.fn.expand(ah)) ~= 1 then
+    table.insert(issues, {
+      label = "ANDROID_HOME menunjuk ke folder yang tidak ada: " .. ah,
+      hint = "Perbaiki path SDK di shell RC.",
+    })
+  end
+  local emu = M.results.emulator or M.check_tool("emulator")
+  if emu and not emu.found then
+    table.insert(issues, {
+      label = "Emulator binary tidak ada (AVD tidak bisa di-list)",
+      hint = "Android Studio → SDK Manager → SDK Tools → Android Emulator.",
+    })
+  end
+  return issues
+end
+
+--- Doctor: tampilkan env issues + saran fix. Ringan, read-only.
+function M.doctor()
+  local lines = { "OS: " .. OS:upper() .. "  Arch: " .. ARCH }
+  local ah = vim.env.ANDROID_HOME or vim.env.ANDROID_SDK_ROOT or "(unset)"
+  table.insert(lines, "ANDROID_HOME: " .. ah)
+  table.insert(lines, "")
+  local issues = M.get_env_issues()
+  if #issues == 0 then
+    table.insert(lines, "Environment OK — tidak ada masalah.")
+  else
+    for _, is in ipairs(issues) do
+      table.insert(lines, "• " .. is.label)
+      table.insert(lines, "  → " .. is.hint)
+    end
+  end
+  local buf = vim.api.nvim_create_buf(false, true)
+  local width, height, col, row = util.float_geom(0.6, 0.5, 60, 12)
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor", width = math.min(76, width), height = math.min(#lines + 4, height),
+    col = col, row = row, style = "minimal", border = "rounded",
+    title = " anvim Doctor ", title_pos = "center",
+  })
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  vim.keymap.set("n", "q", function() util.close_win_buf(win, buf) end, { buffer = buf, nowait = true, silent = true })
+  vim.keymap.set("n", "<Esc>", function() util.close_win_buf(win, buf) end, { buffer = buf, nowait = true, silent = true })
+end
+
 -- ── UI state ──
 M._ui = { buf = nil, win = nil, items = {}, selected = 1 }
 
@@ -347,6 +401,7 @@ local function ui_rebuild()
     table.insert(items, { name = name, result = r, kind = kind })
   end
   M._ui.items = items
+  M._ui.env = M.get_env_issues()
   if M._ui.selected < 1 or M._ui.selected > #items then M._ui.selected = 1 end
 end
 
@@ -369,6 +424,9 @@ local function ui_render()
     table.insert(hl, { line = #lines, group = (i == M._ui.selected) and "AnvimSelected" or grp })
   end
   table.insert(lines, string.rep("─", width - 2))
+  for _, is in ipairs(M._ui.env or {}) do
+    table.insert(lines, "! " .. is.label)
+  end
   table.insert(lines, "Enter Install/Open  i Install all  q Quit")
   vim.bo[buf].modifiable = true
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -386,21 +444,26 @@ local function ui_install_queue(names, on_all_done)
     if on_all_done then on_all_done(false) end
     return
   end
+  -- tutup UI selama install (progress window yang tampil);
+  -- UI dibuka lagi sekali saat queue selesai/gagal/cancel.
+  ui_close()
   ins.install_cancelled = false
   local idx = 1
   local function next()
     if ins.install_cancelled then
       ins.install_cancelled = false
-      ui_rebuild()
-      ui_render()
-      if on_all_done then on_all_done(false) end
+      vim.schedule(function()
+        M.interactive()
+        if on_all_done then on_all_done(false) end
+      end)
       return
     end
     if idx > #names then
       alert.ok("All downloads complete! Tools ready.")
-      ui_rebuild()
-      ui_render()
-      if on_all_done then on_all_done(true) end
+      vim.schedule(function()
+        M.interactive()
+        if on_all_done then on_all_done(true) end
+      end)
       return
     end
     local tool = names[idx]
@@ -411,7 +474,6 @@ local function ui_install_queue(names, on_all_done)
       vim.schedule(next)
       return
     end
-    ui_close()
     ins.install_tool(tool, dl, spec.label, spec.bin, function(ok_done)
       idx = idx + 1
       if not ok_done then
@@ -422,17 +484,7 @@ local function ui_install_queue(names, on_all_done)
         end)
         return
       end
-      vim.schedule(function()
-        M.interactive()
-        -- lanjutkan queue di UI baru
-        local rest = {}
-        for j = idx, #names do table.insert(rest, names[j]) end
-        if #rest > 0 then
-          ui_install_queue(rest, on_all_done)
-        elseif on_all_done then
-          on_all_done(true)
-        end
-      end)
+      vim.schedule(next)
     end)
   end
   next()
@@ -501,7 +553,7 @@ function M.interactive()
     title = " System Check ", title_pos = "center",
   })
   vim.wo[win].winblend = 10
-  vim.api.nvim_buf_set_name(buf, "anvim://system-check")
+  pcall(vim.api.nvim_buf_set_name, buf, "anvim://system-check")
   vim.bo[buf].bufhidden = "wipe"
   vim.bo[buf].filetype = "anvim-check"
 

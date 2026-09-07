@@ -7,9 +7,9 @@ local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 pcall(require, "anvim.theme")
 
-local VERSION = "v0.4.0"
+local VERSION = "v1.0.0"
 
-local config_m, syscheck_m, project_m, devices_m, tasks_m, emulator_m
+local config_m, syscheck_m, project_m, devices_m, tasks_m, emulator_m, flutter_m
 
 local function lazy_modules()
   local ok
@@ -25,6 +25,8 @@ local function lazy_modules()
   if not ok then alert.error("dashboard", "tasks — " .. tostring(tasks_m)); tasks_m = nil end
   ok, emulator_m = pcall(require, "anvim.emulator")
   if not ok then emulator_m = nil end
+  ok, flutter_m = pcall(require, "anvim.flutter")
+  if not ok then flutter_m = nil end
   return config_m and syscheck_m and project_m and devices_m and tasks_m
 end
 
@@ -82,7 +84,7 @@ local function diag_line(proj)
 end
 
 -- ── content builder ──
-local function build_items(proj, h_results, dev_list, avd_info)
+local function build_items(proj, h_results, dev_list, avd_info, fdevs)
   local items = {}
   table.insert(items, { type = "header", text = "Tasks" })
   table.insert(items, { type = "task", label = "Run App", task = "run", icon = "▶" })
@@ -123,6 +125,12 @@ local function build_items(proj, h_results, dev_list, avd_info)
   end
   table.insert(items, { type = "task", label = "Launch Emulator…", task = "emulator", icon = "▶" })
   table.insert(items, { type = "task", label = "Kill Emulator…", task = "emulator_kill", icon = "■" })
+  if fdevs and #fdevs > 0 then
+    table.insert(items, { type = "header", text = "Flutter Targets" })
+    for _, f in ipairs(fdevs) do
+      table.insert(items, { type = "hint", text = string.format("%s [%s] (%s)", f.name, f.id, f.platform) })
+    end
+  end
   table.insert(items, { type = "header", text = "System" })
   table.insert(items, { type = "task", label = "Check System Tools", task = "check", icon = "⚡" })
   table.insert(items, { type = "header", text = "Info" })
@@ -208,7 +216,7 @@ local function render(buf, items, selected, proj, dev_active, height, width)
 
     add("")
     add(center(string.rep("─", math.min(60, width - 4)), width))
-    add(center("j/k Navigate  Enter Select  x Cancel  e Emulator  t Tests  ESC Quit  c Check  r Run  l Logcat", width))
+    add(center("j/k Move  Enter Select  R Rerun  x Cancel  e Emu  t Test  q Quit  c Check  r Run  l Log", width))
 
     local vert_pad = math.floor(math.max(0, height - #content) / 2)
     local lines = {}
@@ -226,7 +234,10 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     end
 
     if cur_sel_line then
+      M.state.sel_line = vert_pad + cur_sel_line
       pcall(vim.api.nvim_win_set_cursor, vim.fn.bufwinid(buf), { vert_pad + cur_sel_line, 2 })
+    else
+      M.state.sel_line = nil
     end
   end)
   if not ok then
@@ -258,7 +269,12 @@ local function refresh_state()
       end
     end
   end
-  M.state.items = build_items(proj, h_results, dev_list, avd_info)
+  -- Flutter targets: hanya untuk project flutter, best-effort
+  local fdevs = {}
+  if flutter_m and proj.type == "flutter" then
+    pcall(function() fdevs = flutter_m.list() or {} end)
+  end
+  M.state.items = build_items(proj, h_results, dev_list, avd_info, fdevs)
   M.state.proj = proj
   if not is_selectable(M.state.items[M.state.selected]) then
     M.state.selected = first_selectable(M.state.items)
@@ -286,7 +302,7 @@ function M.open()
       title = " anvim " .. VERSION .. " ", title_pos = "center",
     })
 
-    vim.api.nvim_buf_set_name(buf, "anvim://dashboard")
+    pcall(vim.api.nvim_buf_set_name, buf, "anvim://dashboard")
     vim.bo[buf].bufhidden = "wipe"
     vim.bo[buf].filetype = "anvim-dashboard"
     vim.wo[win].winblend = d.winblend
@@ -299,6 +315,13 @@ function M.open()
     M.state.selected = first_selectable(M.state.items)
     render(buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
     require("anvim.keymaps.dashboard").set(buf)
+    -- kunci cursor: snap balik ke baris selected (hanya navigasi atas/bawah)
+    pcall(vim.api.nvim_create_augroup, "AnvimDashboard", { clear = true })
+    pcall(vim.api.nvim_create_autocmd, "CursorMoved", {
+      group = "AnvimDashboard",
+      buffer = buf,
+      callback = function() M._snap() end,
+    })
 
     -- health_check.auto: peringatkan tool wajib yang hilang (sekali per buka)
     pcall(function()
@@ -339,14 +362,47 @@ function M.nav(dir)
       if is_selectable(M.state.items[sel]) then break end
     end
     M.state.selected = sel
-    local _, height, _, _ = current_geom()
-    local w2 = select(1, current_geom())
-    -- ambil width dari geom (urutan w,h)
-    local width = w2
+    local width, height = current_geom()
     local proj = M.state.proj or project_m.detect()
     render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
   end)
   if not ok then alert.error("nav", err) end
+end
+
+--- Kembalikan cursor ke baris selected (dipanggil CursorMoved).
+function M._snap()
+  local st = M.state
+  if not st.open or not st.sel_line then return end
+  if not (st.win and vim.api.nvim_win_is_valid(st.win)) then return end
+  if vim.api.nvim_get_current_win() ~= st.win then return end
+  local ok, cur = pcall(vim.api.nvim_win_get_cursor, st.win)
+  if ok and cur and cur[1] ~= st.sel_line then
+    pcall(vim.api.nvim_win_set_cursor, st.win, { st.sel_line, 2 })
+  end
+end
+
+function M.top()
+  local ok, err = pcall(function()
+    M.state.selected = first_selectable(M.state.items)
+    local width, height = current_geom()
+    local proj = M.state.proj or project_m.detect()
+    render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
+  end)
+  if not ok then alert.error("top", err) end
+end
+
+function M.bottom()
+  local ok, err = pcall(function()
+    local last = 1
+    for i, it in ipairs(M.state.items) do
+      if is_selectable(it) then last = i end
+    end
+    M.state.selected = last
+    local width, height = current_geom()
+    local proj = M.state.proj or project_m.detect()
+    render(M.state.buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
+  end)
+  if not ok then alert.error("bottom", err) end
 end
 
 local function ensure_tool(name, msg)
@@ -396,6 +452,12 @@ function M.do_custom(cmd, label)
   tasks_m.run_custom(cmd, label)
 end
 
+function M.do_rerun()
+  if tasks_m.rerun and tasks_m.rerun() then
+    M.close()
+  end
+end
+
 function M.do_cancel_task()
   if tasks_m and tasks_m.stop then
     tasks_m.stop()
@@ -415,8 +477,7 @@ function M.do_emulator_kill()
   -- refresh agar status kill terlihat
   if M.state.open then
     refresh_state()
-    local _, height, _, _ = current_geom()
-    local width = select(1, current_geom())
+    local width, height = current_geom()
     render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
   end
 end
@@ -434,8 +495,7 @@ function M.select()
       elseif item.task == "devices" then
         local dl = devices_m.list()
         refresh_state()
-        local _, height, _, _ = current_geom()
-        local width = select(1, current_geom())
+        local width, height = current_geom()
         render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
         alert.info("Found " .. #dl .. " device(s) — list refreshed")
       else
@@ -459,8 +519,7 @@ function M.select()
       devices_m.set_active(item.device.id)
       alert.info("Active: " .. item.device.id)
       refresh_state()
-      local _, height, _, _ = current_geom()
-      local width = select(1, current_geom())
+      local width, height = current_geom()
       render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
     elseif item.type == "avd" then
       local a = item.avd
@@ -468,8 +527,7 @@ function M.select()
         devices_m.set_active(a.running_id)
         alert.info("Active: " .. a.name .. " (" .. a.running_id .. ")")
         refresh_state()
-        local _, height2, _, _ = current_geom()
-        local width2 = select(1, current_geom())
+        local width2, height2 = current_geom()
         render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height2, width2)
       else
         M.close()
@@ -495,6 +553,8 @@ function M.close()
   M.state.items = {}
   M.state.selected = 1
   M.state.proj = nil
+  M.state.sel_line = nil
+  pcall(vim.api.nvim_clear_autocmds, { group = "AnvimDashboard" })
 end
 
 return M

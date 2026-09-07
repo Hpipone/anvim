@@ -139,10 +139,10 @@ end
 
 local function open_progress_win(name)
   local buf = vim.api.nvim_create_buf(false, true)
-  local w, h, col, row = util.float_geom(0.6, 0.6, 60, 24)
-  -- fixed 60x24 sesuai desain, tapi clamp layar kecil
-  w = math.min(60, w)
-  h = math.min(24, h)
+  local w, h, col, row = util.float_geom(0.75, 0.75, 70, 26)
+  -- besar agar log terbaca, tapi clamp layar kecil
+  w = math.min(100, w)
+  h = math.min(34, h)
   col = math.floor(math.max(0, ((vim.o.columns or 80) - w) / 2))
   row = math.floor(math.max(0, ((vim.o.lines or 24) - h) / 2))
   local win = vim.api.nvim_open_win(buf, true, {

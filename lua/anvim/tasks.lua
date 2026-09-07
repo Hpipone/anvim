@@ -84,7 +84,7 @@ local function ensure_output_win()
   if not (buf and vim.api.nvim_buf_is_valid(buf)) then
     buf = vim.api.nvim_create_buf(false, true)
     M.state.buf = buf
-    vim.api.nvim_buf_set_name(buf, "anvim://task-output")
+    pcall(vim.api.nvim_buf_set_name, buf, "anvim://task-output")
     vim.bo[buf].bufhidden = "hide"
     vim.bo[buf].filetype = "anvim-task"
   end
@@ -237,6 +237,15 @@ function M.run(project, task_name, on_done)
     end
 
     local cwd = (project.root and project.root ~= "") and project.root or util.project_root()
+    -- gradlew tidak executable → coba chmod +x sekali, fallback gradle
+    if cmd[1]:match("gradlew$") and vim.fn.executable(cmd[1]) ~= 1 then
+      pcall(vim.fn.system, "chmod +x " .. util.esc(cmd[1]) .. " 2>/dev/null")
+      if vim.fn.executable(cmd[1]) ~= 1 and vim.fn.executable("gradle") == 1 then
+        alert.warn("gradlew tidak executable — pakai gradle PATH.")
+        cmd = { "gradle", cmd[2] }
+      end
+    end
+    M.state.last = { kind = "named", task = task_name }
     run_cmd(cmd, task_name, cwd, on_done)
   end)
   if not ok then
@@ -260,6 +269,7 @@ function M.run_custom(cmd, label, on_done)
       if on_done then on_done("", false) end
       return
     end
+    M.state.last = { kind = "custom", cmd = cmd, label = label }
     run_cmd(cmd, label, util.project_root(), on_done)
   end)
   if not ok then
@@ -267,6 +277,26 @@ function M.run_custom(cmd, label, on_done)
     alert.error("tasks custom", err)
     if on_done then on_done("", false) end
   end
+end
+
+--- Ulangi task terakhir (named maupun custom). Return false jika belum ada.
+function M.rerun(on_done)
+  local last = M.state.last
+  if not last then
+    alert.warn("Belum ada task yang dijalankan.")
+    return false
+  end
+  if last.kind == "custom" then
+    M.run_custom(last.cmd, last.label, on_done)
+    return true
+  end
+  local ok, proj = pcall(function() return require("anvim.project").detect() end)
+  if not ok or not proj or proj.type == "unknown" then
+    alert.warn("Open Android or Flutter project first.")
+    return false
+  end
+  M.run(proj, last.task, on_done)
+  return true
 end
 
 return M

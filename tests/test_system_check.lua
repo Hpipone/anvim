@@ -157,4 +157,18 @@ return function(ctx)
     sc._ui_close()
     assert(sc._ui.buf == nil, "UI harus bersih setelah close")
   end)
+
+  run("system_check: env issues + doctor", function()
+    setup()
+    mock.raw("env.ANDROID_HOME", "")
+    mock.raw("env.ANDROID_SDK_ROOT", "")
+    mock.raw("fn.isdirectory", function() return 0 end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    local issues = sc.get_env_issues()
+    assert(#issues >= 1, "tanpa ANDROID_HOME harus ada issue")
+    sc.doctor()
+    assert(true)
+  end)
 end
