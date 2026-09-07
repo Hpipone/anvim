@@ -117,7 +117,23 @@ function M.verify_sha256(zip_path, dl_info, logs)
     table.insert(logs, "⚠ sha256 download gagal — lanjut tanpa verify: " .. sha_url)
     return true
   end
-  local expected = remote:match("(%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x)"):lower()
+  -- bila checksum file multi-baris (mis. SHA256SUMS.txt), petik baris file kita
+  local expected = nil
+  if dl_info.sha256_file then
+    for line in remote:gmatch("[^\r\n]+") do
+      if line:find(dl_info.sha256_file, 1, true) then
+        expected = line:match("(%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x)")
+        if expected then break end
+      end
+    end
+    if not expected then
+      table.insert(logs, "⚠ sha256 untuk " .. dl_info.sha256_file .. " tidak ada — lanjut tanpa verify")
+      return true
+    end
+    expected = expected:lower()
+  else
+    expected = remote:match("(%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x)"):lower()
+  end
   if not expected then
     table.insert(logs, "⚠ sha256 remote tidak valid — lanjut tanpa verify")
     return true
@@ -207,8 +223,10 @@ local function inject_path_to_rc(bin_dir)
   return false, "⚠ Gagal nulis RC, tambah manual: " .. export_posix
 end
 
---- Deploy aman tanpa sudo: copy binary ke ~/.local/bin + PATH injection.
---- Tidak memindahkan file keluar dari tools dir (tidak merusak tool_subdir).
+--- Deploy kanonis ke ~/.local/bin: symlink dulu (satu sumber truth di
+--- tools-dir), fallback copy bila symlink gagal. Windows selalu copy.
+--- Hanya bin_dir yang masuk PATH session (tool_subdir TIDAK — agar deteksi
+--- selalu menang di ~/.local/bin, bukan ~/.anvim/tools).
 --- Return (success, log_lines)
 function M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
   local lines = {}
@@ -222,7 +240,7 @@ function M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
   if OS == "windows" then
     pcall(vim.fn.mkdir, bin_dir, "p")
     table.insert(lines, "Deploy " .. bin_name .. " → " .. bin_dir)
-    local ok_cp = pcall(vim.fn.system, "copy " .. util.esc(bin_path) .. " " .. util.esc(bin_dir) .. " 2>&1")
+    pcall(vim.fn.system, "copy " .. util.esc(bin_path) .. " " .. util.esc(bin_dir) .. " 2>&1")
     if vim.fn.executable(bin_name) == 1 or vim.fn.executable(bin_dir .. "\\" .. bin_name) == 1 then
       table.insert(lines, "✓ " .. bin_name .. " ready")
       return true, lines
@@ -233,31 +251,39 @@ function M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
   end
 
   pcall(vim.fn.mkdir, bin_dir, "p")
-  table.insert(lines, "Deploy " .. bin_name .. " → " .. bin_dir .. " ...")
+  local link = bin_dir .. "/" .. bin_name
+  table.insert(lines, "Deploy " .. bin_name .. " → " .. link .. " ...")
 
-  -- copy (bukan mv) agar tools dir tetap utuh
-  local cp_cmd = "cp -f " .. util.esc(bin_path) .. " " .. util.esc(bin_dir .. "/" .. bin_name) .. " 2>&1"
-  pcall(vim.fn.system, cp_cmd)
-  pcall(vim.fn.system, "chmod +x " .. util.esc(bin_dir .. "/" .. bin_name) .. " 2>/dev/null")
-
-  -- update PATH session ini
-  for _, p in ipairs({ bin_dir, tool_subdir }) do
-    if p and p ~= "" and not vim.env.PATH:find(p, 1, true) then
-      vim.env.PATH = p .. ":" .. vim.env.PATH
-    end
+  -- ATTEMPT 1: symlink (preferred — tools-dir tetap sumber truth)
+  local linked = false
+  pcall(vim.fn.system, "ln -sfn " .. util.esc(bin_path) .. " " .. util.esc(link) .. " 2>&1")
+  local st = vim.uv.fs_stat(link)
+  if st and vim.fn.executable(link) == 1 then
+    linked = true
+    table.insert(lines, "  symlink → " .. bin_path)
+  else
+    -- ATTEMPT 2: copy fallback
+    table.insert(lines, "  symlink gagal, fallback copy...")
+    pcall(vim.fn.system, "cp -f " .. util.esc(bin_path) .. " " .. util.esc(link) .. " 2>&1")
+    pcall(vim.fn.system, "chmod +x " .. util.esc(link) .. " 2>/dev/null")
   end
 
-  if vim.fn.executable(bin_name) == 1 or vim.fn.executable(bin_dir .. "/" .. bin_name) == 1 then
-    table.insert(lines, "✓ " .. bin_name .. " ready (no sudo)")
+  -- update PATH session ini: HANYA bin_dir (kanonis)
+  if not vim.env.PATH:find(bin_dir, 1, true) then
+    vim.env.PATH = bin_dir .. ":" .. vim.env.PATH
+  end
+
+  if vim.fn.executable(bin_name) == 1 or vim.fn.executable(link) == 1 then
+    table.insert(lines, "✓ " .. bin_name .. " ready @ " .. link .. (linked and "" or " (copy)"))
     local _, log_line = inject_path_to_rc(bin_dir)
     table.insert(lines, "  " .. log_line)
     return true, lines
   end
 
-  table.insert(lines, "  copy gagal / belum di PATH")
+  table.insert(lines, "  deploy gagal / belum di PATH")
   local _, log_line = inject_path_to_rc(bin_dir)
   table.insert(lines, "  " .. log_line)
-  table.insert(lines, "⚠ manual: cp " .. bin_path .. " " .. bin_dir .. "/")
+  table.insert(lines, "⚠ manual: ln -s " .. bin_path .. " " .. link)
   return false, lines
 end
 
@@ -278,6 +304,18 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
     alert.info(label .. " already in PATH, skip")
     on_done(true)
     return
+  end
+
+  -- no_deploy (mis. scrcpy): skip bila binary sudah ada di tools-dir
+  if dl_info.no_deploy then
+    local have = vim.fn.glob(base .. "/" .. name .. "/**/" .. bin_name, false, true)
+    for _, p in ipairs(have) do
+      if vim.fn.executable(p) == 1 then
+        alert.info(label .. " already installed @ " .. p)
+        on_done(true)
+        return
+      end
+    end
   end
 
   vim.fn.mkdir(dest, "p")
@@ -420,11 +458,20 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
             table.insert(logs, "Extract OK")
             table.insert(logs, "Organizing files...")
 
-            local found = vim.fn.glob(extract_dir .. "/**/" .. bin_name, false, true)
+            -- cari binary: pakai dl_info.dir dulu (info resmi), fallback glob
             local rel_path = ""
-            if #found > 0 then
-              local parent = vim.fn.fnamemodify(found[1], ":h")
-              rel_path = parent:sub(#extract_dir + 2)
+            if dl_info.dir and dl_info.dir ~= "" then
+              local cand = extract_dir .. "/" .. dl_info.dir .. "/" .. bin_name
+              if vim.fn.executable(cand) == 1 or vim.fn.filereadable(cand) == 1 then
+                rel_path = dl_info.dir
+              end
+            end
+            if rel_path == "" then
+              local found = vim.fn.glob(extract_dir .. "/**/" .. bin_name, false, true)
+              if #found > 0 then
+                local parent = vim.fn.fnamemodify(found[1], ":h")
+                rel_path = parent:sub(#extract_dir + 2)
+              end
             end
 
             if OS == "windows" then
@@ -437,7 +484,8 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
             table.insert(logs, "Installed at: " .. dest)
             redraw()
 
-            -- PHASE 3: deploy (no-sudo copy ke ~/.local/bin)
+            -- PHASE 3: deploy — symlink kanonis ke ~/.local/bin,
+            -- atau skip bila dl_info.no_deploy (mis. scrcpy: jalan dari tools-dir)
             M.phase = "Deploying " .. label .. "..."
             local tool_subdir = dest
             if rel_path and rel_path ~= "" then
@@ -445,25 +493,40 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
             end
 
             local bin_path = tool_subdir .. "/" .. bin_name
-            local deployed, deploy_logs = M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
-            for _, l in ipairs(deploy_logs) do
-              table.insert(logs, l)
+            local deployed
+            if dl_info.no_deploy then
+              deployed = vim.fn.executable(bin_path) == 1 or vim.fn.filereadable(bin_path) == 1
+              table.insert(logs, (deployed and "✓ " or "✗ ") .. bin_name .. " stays @ " .. bin_path .. " (no deploy)")
+              if OS ~= "windows" then
+                pcall(vim.fn.system, "chmod +x " .. util.esc(bin_path) .. " 2>/dev/null")
+              end
+            else
+              local deploy_logs
+              deployed, deploy_logs = M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
+              for _, l in ipairs(deploy_logs) do
+                table.insert(logs, l)
+              end
             end
             redraw()
 
-            -- PHASE 4: verify executable (tanpa sukses palsu)
+            -- PHASE 4: verify (PATH hanya bin_dir yang kanonis)
             M.phase = "Verifying..."
             table.insert(logs, "Verifying...")
             redraw()
 
             local bin_dir = (cfg_ok and cfg and cfg.install and cfg.install.bin_dir) or util.local_bin()
-            for _, p in ipairs({ bin_dir, dest, tool_subdir }) do
-              if p and p ~= "" and not vim.env.PATH:find(p, 1, true) then
-                vim.env.PATH = p .. ":" .. vim.env.PATH
+            if not dl_info.no_deploy then
+              if not vim.env.PATH:find(bin_dir, 1, true) then
+                vim.env.PATH = bin_dir .. ":" .. vim.env.PATH
               end
             end
 
-            local verified = vim.fn.executable(bin_name) == 1
+            local verified
+            if dl_info.no_deploy then
+              verified = vim.fn.executable(bin_path) == 1
+            else
+              verified = vim.fn.executable(bin_name) == 1
+            end
             if verified and deployed then
               table.insert(logs, "✓ " .. label .. " siap dipakai!")
               redraw()

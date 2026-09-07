@@ -42,8 +42,21 @@ return function(ctx)
     assert(#names == 2 and names[1] == "Pixel_6_API_34", "got " .. table.concat(names, ","))
   end)
 
-  run("emulator: find_binary via ANDROID_HOME", function()
+  run("emulator: find_binary prioritaskan local/bin", function()
     setup()
+    package.loaded["anvim.emulator"] = nil
+    package.loaded["anvim.util"] = nil
+    local emu = require("anvim.emulator")
+    assert(emu.find_binary() == "/home/testuser/.local/bin/emulator",
+      "got " .. tostring(emu.find_binary()))
+  end)
+
+  run("emulator: find_binary fallback ANDROID_HOME", function()
+    setup()
+    mock.raw("fn.executable", function(p)
+      if tostring(p):find("Android/Sdk") then return 1 end
+      return 0
+    end)
     package.loaded["anvim.emulator"] = nil
     package.loaded["anvim.util"] = nil
     local emu = require("anvim.emulator")

@@ -68,7 +68,7 @@ function M.tbl_count(t)
 end
 
 --- Urutan tool stabil (pairs acak, jadi sort eksplisit).
-M.TOOL_ORDER = { "adb", "java", "flutter", "git", "gradle" }
+M.TOOL_ORDER = { "adb", "java", "flutter", "git", "gradle", "scrcpy" }
 
 function M.sorted_tool_names(results)
   local names = {}
@@ -139,6 +139,61 @@ function M.close_win_buf(win, buf)
   if buf and vim.api.nvim_buf_is_valid(buf) then
     pcall(vim.api.nvim_buf_delete, buf, { force = true })
   end
+end
+
+M._extra_cache = {}
+
+--- Cari binary di folder custom user (Downloads/Documents/dll), depth terbatas.
+--- Hanya sebagai fallback terakhir; hasil di-cache per session.
+--- @return path absolut atau nil
+function M.search_extra_dirs(bin, bins)
+  if M.OS == "windows" then return nil end
+  if not M.is_safe_bin_name(bin) then return nil end
+  local cfg_ok, cfg = pcall(function() return require("anvim.config").get() end)
+  local dc = (cfg_ok and cfg and cfg.detect) or {}
+  local depth = dc.max_depth or 3
+  local ttl = (dc.cache_ttl or 300) * 1000
+  local now = vim.uv.now()
+  local cached = M._extra_cache[bin]
+  if cached and (now - cached.at) < ttl then return cached.path end
+  if vim.fn.executable("find") ~= 1 then
+    M._extra_cache[bin] = { path = nil, at = now }
+    return nil
+  end
+  local dirs = {}
+  for _, d in ipairs(dc.extra_dirs or {}) do table.insert(dirs, d) end
+  for _, d in ipairs({ "~/Downloads", "~/Documents" }) do table.insert(dirs, d) end
+  local names = { bin }
+  if type(bins) == "table" then
+    for _, b in ipairs(bins) do
+      if b ~= bin and M.is_safe_bin_name(b) then table.insert(names, b) end
+    end
+  end
+  local found = nil
+  for _, d in ipairs(dirs) do
+    local dir = vim.fn.expand(d)
+    if dir ~= "" and vim.fn.isdirectory(dir) == 1 and not found then
+      for _, n in ipairs(names) do
+        if not found then
+          local cmd = "find " .. M.esc(dir) .. " -maxdepth " .. tonumber(depth)
+            .. " -type f -name " .. M.esc(n) .. " 2>/dev/null | head -5"
+          local ok, out = pcall(vim.fn.system, cmd)
+          if ok and out then
+            for line in out:gmatch("[^\r\n]+") do
+              local p = vim.trim(line)
+              if p ~= "" and vim.fn.executable(p) == 1 then
+                found = p
+                break
+              end
+            end
+          end
+        end
+      end
+    end
+    if found then break end
+  end
+  M._extra_cache[bin] = { path = found, at = now }
+  return found
 end
 
 return M

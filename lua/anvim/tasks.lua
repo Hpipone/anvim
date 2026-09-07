@@ -1,7 +1,7 @@
 -- anvim: task execution engine — timeout, device -s, split output + quickfix
 
 local M = {}
-M.state = { running = false, current = nil, job_id = nil, buf = nil, win = nil }
+M.state = { running = false, current = nil, job_id = nil, buf = nil, win = nil, gen = 0, last = nil }
 local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 
@@ -119,6 +119,7 @@ local function append_output(buf, data)
 end
 
 function M.stop()
+  M.state.gen = (M.state.gen or 0) + 1
   if M.state.job_id then
     pcall(vim.fn.jobstop, M.state.job_id)
     M.state.job_id = nil
@@ -128,12 +129,15 @@ function M.stop()
 end
 
 --- Inti eksekusi: dipakai run() dan run_custom(). label untuk judul/output.
-local function run_cmd(cmd, label, cwd, on_done)
+--- env opsional diteruskan ke job (mis. ANDROID_SERIAL untuk gradle).
+local function run_cmd(cmd, label, cwd, on_done, env)
   if M.state.running then
     alert.warn("Task already running: " .. tostring(M.state.current) .. " (x untuk cancel)")
     return
   end
 
+  M.state.gen = (M.state.gen or 0) + 1
+  local my_gen = M.state.gen
   M.state.running = true
   M.state.current = label
   alert.info("Running: " .. table.concat(cmd, " "))
@@ -150,6 +154,7 @@ local function run_cmd(cmd, label, cwd, on_done)
   if t.timeout_ms and t.timeout_ms > 0 then
     timer = vim.uv.new_timer()
     timer:start(t.timeout_ms, 0, vim.schedule_wrap(function()
+      if my_gen ~= M.state.gen then return end
       if M.state.running and M.state.current == label then
         timed_out = true
         M.stop()
@@ -162,6 +167,7 @@ local function run_cmd(cmd, label, cwd, on_done)
 
   local job_id = vim.fn.jobstart(cmd, {
     cwd = cwd,
+    env = env,
     stdout_buffered = false,
     stderr_buffered = false,
     on_stdout = function(_, data)
@@ -180,10 +186,11 @@ local function run_cmd(cmd, label, cwd, on_done)
         vim.schedule(function() append_output(M.state.buf, data) end)
       end
     end,
-    on_exit = function(_, code)
-      if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
-      if timed_out then return end
-      M.state.running = false
+      on_exit = function(_, code)
+        if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
+        if timed_out then return end
+        if my_gen ~= M.state.gen then return end -- dibatalkan/diganti: abaikan
+        M.state.running = false
       M.state.current = nil
       M.state.job_id = nil
       local output = table.concat(out_lines, "\n")
@@ -237,6 +244,15 @@ function M.run(project, task_name, on_done)
     end
 
     local cwd = (project.root and project.root ~= "") and project.root or util.project_root()
+    -- gradle tidak kenal -s: teruskan device via ANDROID_SERIAL
+    local env = nil
+    if project.type == "android" then
+      local ok_d, dev = pcall(require, "anvim.devices")
+      if ok_d and dev.get_active then
+        local id = dev.get_active()
+        if id and id ~= "" then env = { ANDROID_SERIAL = id } end
+      end
+    end
     -- gradlew tidak executable → coba chmod +x sekali, fallback gradle
     if cmd[1]:match("gradlew$") and vim.fn.executable(cmd[1]) ~= 1 then
       pcall(vim.fn.system, "chmod +x " .. util.esc(cmd[1]) .. " 2>/dev/null")
@@ -246,7 +262,7 @@ function M.run(project, task_name, on_done)
       end
     end
     M.state.last = { kind = "named", task = task_name }
-    run_cmd(cmd, task_name, cwd, on_done)
+    run_cmd(cmd, task_name, cwd, on_done, env)
   end)
   if not ok then
     M.state.running = false

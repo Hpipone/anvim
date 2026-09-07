@@ -4,7 +4,7 @@
 local M = {}
 
 M.defaults = {
-  version = "1.0.0",
+  version = "1.2.0",
   dashboard = {
     width = 0.8,
     height = 0.8,
@@ -15,7 +15,7 @@ M.defaults = {
   },
   health_check = {
     auto = true,
-    tools = { "adb", "java", "git", "flutter", "gradle" },
+    tools = { "adb", "java", "git", "flutter", "gradle", "scrcpy" },
   },
   logcat = {
     max_lines = 5000,
@@ -30,8 +30,22 @@ M.defaults = {
     dir = nil, -- default ~/.anvim/tools (via util.tools_dir())
     bin_dir = nil, -- default ~/.local/bin (via util.local_bin())
   },
+  detect = {
+    extra_dirs = {}, -- mis. { "~/tools", "/opt/android" } (+ bawaan ~/Downloads ~/Documents)
+    max_depth = 3,
+    cache_ttl = 300, -- detik
+  },
   emulator = {
     boot_timeout_ms = 120000,
+  },
+  scrcpy = {
+    replace_emulator = true,
+    max_size = 1920,
+    bit_rate = "8M",
+    audio = false,
+    stay_awake = true,
+    turn_screen_off = true,
+    record_dir = "~/Videos",
   },
 }
 

@@ -32,6 +32,21 @@
 - [x] Active device persisten (`~/.anvim/active_device`, restore + clear)
 - [x] Tests 84 pass (13 suites)
 
+## Fase 5 — Canonical `~/.local/bin` detection (DONE, v1.1.0)
+- [x] Symlink deploy (`ln -sfn`, fallback copy; Windows copy) — tools-dir tetap sumber truth
+- [x] PATH session hanya `bin_dir`; `find_tool` prioritas `bin_dir` → PATH → SDK → ANDROID_HOME → folder custom
+- [x] Deteksi folder custom: `detect.extra_dirs` + bawaan `~/Downloads` `~/Documents` (depth-limited, cached)
+- [x] `M.repair()` di `:AnvimCheck`: buang tools-dir dari PATH + symlink hilang
+- [x] Windows `.bat` (flutter/gradle), `;` separator; emulator kenal `local/bin`
+- [x] Gradle `ANDROID_SERIAL`, anti-double-`on_done` (job gen), BufWipeout anti-stuck
+- [x] Tests 106 pass
+
+## Fase 6 — scrcpy (DONE, v1.2.0)
+- [x] TOOLS scrcpy v4.1 (linux x64/macos arm+intel/win64, `no_deploy`, SHA256SUMS per-file, ARM64 fallback manual)
+- [x] `scrcpy.lua`: find tools-dir, flags full-custom (size/bitrate/audio/record), launch/stop per-device
+- [x] Dashboard section Scrcpy gantikan Emulator (toggle `replace_emulator`), key `m`, `:AnvimScrcpy[KILL]`
+- [x] Tests 116 pass (17 suites)
+
 ## Fase 4 — Pre-release (DONE, v1.0.0)
 - [x] Dashboard cursor lock vertikal (h/l/arrows Nop + CursorMoved snap, gg/G)
 - [x] Install window diperbesar (0.75 fraksi, min 70x26) + queue stacking bug fix

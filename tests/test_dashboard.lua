@@ -300,6 +300,70 @@ return function(ctx)
     assert(dash.state.open == false)
   end)
 
+  run("dashboard: scrcpy gantikan emulator bila ada", function()
+    package.loaded["anvim.devices"] = {
+      list = function() return { { id = "RF123", model = "Pixel", status = "device" } } end,
+      get_active = function() return nil end,
+      set_active = function() return true end,
+    }
+    package.loaded["anvim.scrcpy"] = {
+      find_binary = function() return "/home/testuser/.anvim/tools/scrcpy/scrcpy" end,
+      is_running = function() return false end,
+    }
+    package.loaded["anvim.emulator"] = {
+      list_avds = function() return { "Pixel_6" } end,
+      running_map = function() return {} end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    local has_scrcpy, has_emu = false, false
+    for _, it in ipairs(dash.state.items) do
+      if it.type == "scrcpy" then has_scrcpy = true end
+      if it.type == "avd" or (it.type == "task" and it.task == "emulator") then has_emu = true end
+    end
+    assert(has_scrcpy == true, "section scrcpy harus ada")
+    assert(has_emu == false, "section emulator harus disembunyikan")
+  end)
+
+  run("dashboard: emulator tampil bila scrcpy hilang", function()
+    package.loaded["anvim.scrcpy"] = { find_binary = function() return nil end }
+    package.loaded["anvim.emulator"] = {
+      list_avds = function() return { "Pixel_6" } end,
+      running_map = function() return {} end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    local has_emu = false
+    for _, it in ipairs(dash.state.items) do
+      if it.type == "avd" then has_emu = true end
+    end
+    assert(has_emu == true, "avd harus tampil tanpa scrcpy")
+  end)
+
+  run("dashboard: select scrcpy running stops", function()
+    local stopped
+    package.loaded["anvim.scrcpy"] = {
+      find_binary = function() return "/x/scrcpy" end,
+      is_running = function() return true end,
+      stop = function(id) stopped = id end,
+      launch = function() error("must not launch") end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = true; dash.state.buf = 11; dash.state.win = 22
+    dash.state.items = {
+      { type = "scrcpy", label = "x", scrcpy = { id = "RF123", running = true } },
+    }
+    dash.state.selected = 1
+    dash.state.proj = { name = "test", type = "android" }
+    dash.select()
+    assert(stopped == "RF123", "got " .. tostring(stopped))
+  end)
+
   run("dashboard: auto warn saat tool hilang", function()
     package.loaded["anvim.config"] = {
       get = function() return {

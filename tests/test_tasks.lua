@@ -151,4 +151,32 @@ return function(ctx)
     assert(t.state.last.task == "clean")
     assert(t.rerun() == true)
   end)
+
+  run("tasks: gradle teruskan ANDROID_SERIAL", function()
+    setup()
+    local got_env
+    mock.raw("fn.jobstart", function(_, opts)
+      got_env = opts.env
+      if opts and opts.on_exit then opts.on_exit(nil, 0) end
+      return 5
+    end)
+    package.loaded["anvim.devices"] = { get_active = function() return "RF123" end }
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.run({ type = "android", build_tool = "gradle", root = "/tmp/proj" }, "build")
+    assert(got_env and got_env.ANDROID_SERIAL == "RF123", "ANDROID_SERIAL hilang")
+  end)
+
+  run("tasks: on_exit basi setelah cancel diabaikan", function()
+    setup()
+    local exit_cb
+    mock.raw("fn.jobstart", function(_, opts) exit_cb = opts.on_exit return 5 end)
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local n = 0
+    t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean", function() n = n + 1 end)
+    t.stop() -- cancel: gen naik
+    exit_cb(nil, 1) -- on_exit telat dari job mati
+    assert(n == 0, "callback basi harus diabaikan, got " .. n)
+  end)
 end

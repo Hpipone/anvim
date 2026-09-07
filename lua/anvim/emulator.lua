@@ -4,6 +4,7 @@
 local M = {}
 local alert = require("anvim.status-alert")
 local util = require("anvim.util")
+local OS = util.OS
 
 local function cfg_boot_timeout()
   local ok, c = pcall(function() return require("anvim.config").get() end)
@@ -15,9 +16,12 @@ end
 
 --- Cari binary emulator. Return path atau nil.
 function M.find_binary()
-  local exe = vim.fn.exepath("emulator")
+  local exe = vim.fn.exepath(OS == "windows" and "emulator.exe" or "emulator")
   if exe and exe ~= "" then return exe end
-  local cands = {}
+  local lb = util.local_bin()
+  local cands = {
+    lb .. (OS == "windows" and "\\emulator.exe" or "/emulator"),
+  }
   local ah = vim.env.ANDROID_HOME or vim.env.ANDROID_SDK_ROOT
   if ah and ah ~= "" then
     table.insert(cands, ah .. "/emulator/emulator")

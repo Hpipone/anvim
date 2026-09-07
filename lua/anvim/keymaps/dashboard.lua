@@ -35,6 +35,7 @@ function M.set(buf)
   map("e", "<Cmd>lua require('anvim.dashboard').do_emulator()<CR>", "Launch emulator")
   map("t", "<Cmd>lua require('anvim.dashboard').do_test()<CR>", "Run tests")
   map("R", "<Cmd>lua require('anvim.dashboard').do_rerun()<CR>", "Rerun last task")
+  map("m", "<Cmd>lua require('anvim.dashboard').do_scrcpy()<CR>", "Scrcpy mirror")
 end
 
 return M

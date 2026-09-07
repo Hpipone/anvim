@@ -2,17 +2,19 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.0.0** — Stable
+> **v1.2.0** — Stable (scrcpy mirror)
 
 ## Features
 
 - **Dashboard** — floating window, keyboard-only (`j/k`, no horizontal drift), LSP diagnostics, auto health warnings
 - **System check** — detects ADB, Java, Flutter, Git, Gradle (+Emulator), enforces minimum versions, one-key auto-install
-- **Installer** — download → checksum → extract → `~/.local/bin`, no sudo, multi-shell PATH
+- **Detection** — canonical `~/.local/bin` first, then PATH, SDK paths, `ANDROID_HOME`, then your folders (`~/Downloads`, `~/Documents`, `detect.extra_dirs`)
+- **Installer** — download → checksum → extract → symlink into `~/.local/bin`, no sudo, multi-shell PATH; `:AnvimCheck` auto-repairs old installs
 - **Tasks** — run / clean / build / test / custom, timeout + cancel, split output + quickfix
 - **Logcat** — live view, level/tag filters, save to file, clipboard copy
-- **Devices** — multi-device select (`-s` everywhere), offline/unauthorized warnings, persistent active device
+- **Devices** — multi-device select (`-s` everywhere, `ANDROID_SERIAL` for Gradle), offline/unauthorized warnings, persistent active device
 - **Emulator** — list AVDs, launch (cold/quick/wipe), kill, boot wait + auto-select
+- **Scrcpy** — mirror + control phone per device, record to `~/Videos`, custom flags; replaces emulator section when installed
 
 ## Requirements
 
@@ -40,6 +42,20 @@ return {
       },
     },
     emulator = { boot_timeout_ms = 120000 },
+    detect = {
+      extra_dirs = { "~/tools" }, -- searched last (depth-limited, cached)
+      max_depth = 3,
+      cache_ttl = 300,
+    },
+    scrcpy = {
+      replace_emulator = true, -- hide emulator section when scrcpy exists
+      max_size = 1920,
+      bit_rate = "8M",
+      audio = false, -- true = forward audio too
+      stay_awake = true,
+      turn_screen_off = true,
+      record_dir = "~/Videos",
+    },
   },
 }
 ```
@@ -56,6 +72,7 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | `r` / `t` / `R` | Run app / tests / rerun last |
 | `l` | Logcat |
 | `e` | Emulator |
+| `m` | Scrcpy mirror |
 | `x` | Cancel task |
 | `q` | Quit |
 
@@ -67,6 +84,7 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | `:AnvimRun` / `:AnvimTest` / `:AnvimRerun` / `:AnvimCustom` | Tasks |
 | `:AnvimLogcat` (`<leader>al`) / `:AnvimLogcatSave [path]` | Logs |
 | `:AnvimEmulator` / `:AnvimEmulatorKill` | Emulator |
+| `:AnvimScrcpy` / `:AnvimScrcpyKill` | Mirror phone screen |
 | `:AnvimHelp` | Help |
 
 Logcat keys: `V/D/I/W/E/F` level, `T` tag, `S` save, `yy` copy line, `/` search.
@@ -76,7 +94,7 @@ Custom tasks appear in the dashboard (★). Theming via `AnvimTitle/Header/Selec
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 97 unit tests, no framework
+nvim --headless -l tests/run.lua   # 116 unit tests, no framework
 ```
 
 ## Roadmap

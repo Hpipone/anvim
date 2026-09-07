@@ -250,4 +250,35 @@ return function(ctx)
     cbs[2](nil, 0)
     assert(done_ok == true, "on_done(true) expected, got " .. tostring(done_ok))
   end)
+
+  run("deploy_binary: symlink preferred, copy fallback", function()
+    base_mocks()
+    local cmds = {}
+    mock.raw("fn.system", function(cmd) table.insert(cmds, tostring(cmd)) return "" end)
+    mock.raw("uv.fs_stat", function(p)
+      if tostring(p):find("%.local/bin/adb") then return { type = "link" } end
+      return nil
+    end)
+    package.loaded["anvim.installation"] = nil
+    local ins = require("anvim.installation")
+    local ok, deploy_logs = ins.deploy_binary("/home/testuser/.anvim/tools/adb/platform-tools/adb", "adb",
+      "/home/testuser/.anvim/tools/adb/platform-tools", {})
+    assert(ok == true)
+    assert(has_line(deploy_logs, "symlink"), "got: " .. table.concat(deploy_logs, " | "))
+    assert(table.concat(cmds, "\n"):find("ln %-sfn"), "harus ln -sfn")
+  end)
+
+  run("deploy_binary: PATH hanya bin_dir (tanpa tools-dir)", function()
+    base_mocks()
+    mock.raw("fn.executable", function() return 1 end)
+    mock.raw("fn.system", function() return "" end)
+    mock.raw("env.PATH", "/usr/bin:/bin")
+    package.loaded["anvim.installation"] = nil
+    local ins = require("anvim.installation")
+    ins.deploy_binary("/home/testuser/.anvim/tools/adb/platform-tools/adb", "adb",
+      "/home/testuser/.anvim/tools/adb/platform-tools", {})
+    assert(not vim.env.PATH:find("anvim/tools", 1, true), "tools-dir bocor: " .. vim.env.PATH)
+    local bindir = "/home/testuser/.local/bin"
+    assert(vim.env.PATH:sub(1, #bindir) == bindir, "got " .. vim.env.PATH)
+  end)
 end

@@ -7,9 +7,9 @@ local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 pcall(require, "anvim.theme")
 
-local VERSION = "v1.0.0"
+local VERSION = "v1.2.0"
 
-local config_m, syscheck_m, project_m, devices_m, tasks_m, emulator_m, flutter_m
+local config_m, syscheck_m, project_m, devices_m, tasks_m, emulator_m, flutter_m, scrcpy_m
 
 local function lazy_modules()
   local ok
@@ -27,6 +27,8 @@ local function lazy_modules()
   if not ok then emulator_m = nil end
   ok, flutter_m = pcall(require, "anvim.flutter")
   if not ok then flutter_m = nil end
+  ok, scrcpy_m = pcall(require, "anvim.scrcpy")
+  if not ok then scrcpy_m = nil end
   return config_m and syscheck_m and project_m and devices_m and tasks_m
 end
 
@@ -44,7 +46,7 @@ local function cfg_dashboard()
 end
 
 local function is_selectable(item)
-  return item and (item.type == "task" or item.type == "device" or item.type == "avd" or item.type == "custom")
+  return item and (item.type == "task" or item.type == "device" or item.type == "avd" or item.type == "custom" or item.type == "scrcpy")
 end
 
 local function custom_tasks()
@@ -84,7 +86,7 @@ local function diag_line(proj)
 end
 
 -- ── content builder ──
-local function build_items(proj, h_results, dev_list, avd_info, fdevs)
+local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_info, show_emulators)
   local items = {}
   table.insert(items, { type = "header", text = "Tasks" })
   table.insert(items, { type = "task", label = "Run App", task = "run", icon = "▶" })
@@ -109,22 +111,35 @@ local function build_items(proj, h_results, dev_list, avd_info, fdevs)
     table.insert(items, { type = "hint", text = "(no devices — hubungkan device / emulator)" })
   end
   table.insert(items, { type = "task", label = "Refresh Devices", task = "devices", icon = "↻" })
-  table.insert(items, { type = "header", text = "Emulators" })
-  if avd_info and #avd_info > 0 then
-    for _, a in ipairs(avd_info) do
-      if a.running_id then
-        local is_active = devices_m and a.running_id == devices_m.get_active()
-        local prefix = is_active and "●" or "○"
-        table.insert(items, { type = "avd", label = string.format("%s %s (%s)", prefix, a.name, a.running_id), avd = a })
+  if scrcpy_info and #scrcpy_info > 0 then
+    table.insert(items, { type = "header", text = "Scrcpy" })
+    for _, s in ipairs(scrcpy_info) do
+      if s.running then
+        table.insert(items, { type = "scrcpy", label = string.format("● %s (%s) — mirroring", s.model or "device", s.id), scrcpy = s })
       else
-        table.insert(items, { type = "avd", label = string.format("○ %s (stopped)", a.name), avd = a })
+        table.insert(items, { type = "scrcpy", label = string.format("○ %s (%s) — mirror", s.model or "device", s.id), scrcpy = s })
       end
     end
-  else
-    table.insert(items, { type = "hint", text = "(no AVD — buat via Android Studio Device Manager)" })
+    table.insert(items, { type = "task", label = "Scrcpy… (mirror/record/stop)", task = "scrcpy", icon = "◉" })
   end
-  table.insert(items, { type = "task", label = "Launch Emulator…", task = "emulator", icon = "▶" })
-  table.insert(items, { type = "task", label = "Kill Emulator…", task = "emulator_kill", icon = "■" })
+  if show_emulators ~= false then
+    table.insert(items, { type = "header", text = "Emulators" })
+    if avd_info and #avd_info > 0 then
+      for _, a in ipairs(avd_info) do
+        if a.running_id then
+          local is_active = devices_m and a.running_id == devices_m.get_active()
+          local prefix = is_active and "●" or "○"
+          table.insert(items, { type = "avd", label = string.format("%s %s (%s)", prefix, a.name, a.running_id), avd = a })
+        else
+          table.insert(items, { type = "avd", label = string.format("○ %s (stopped)", a.name), avd = a })
+        end
+      end
+    else
+      table.insert(items, { type = "hint", text = "(no AVD — buat via Android Studio Device Manager)" })
+    end
+    table.insert(items, { type = "task", label = "Launch Emulator…", task = "emulator", icon = "▶" })
+    table.insert(items, { type = "task", label = "Kill Emulator…", task = "emulator_kill", icon = "■" })
+  end
   if fdevs and #fdevs > 0 then
     table.insert(items, { type = "header", text = "Flutter Targets" })
     for _, f in ipairs(fdevs) do
@@ -205,6 +220,10 @@ local function render(buf, items, selected, proj, dev_active, height, width)
         local txt = prefix .. "▣  " .. item.label
         add(center(txt, width), is_sel and "AnvimSelected" or nil)
         if is_sel then cur_sel_line = #content end
+      elseif item.type == "scrcpy" then
+        local txt = prefix .. "◉  " .. item.label
+        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        if is_sel then cur_sel_line = #content end
       elseif item.type == "health" then
         local line = (is_sel and prefix or "  ") .. syscheck_m.format_line(item.tool, item.result)
         local g = is_sel and "AnvimSelected"
@@ -216,7 +235,7 @@ local function render(buf, items, selected, proj, dev_active, height, width)
 
     add("")
     add(center(string.rep("─", math.min(60, width - 4)), width))
-    add(center("j/k Move  Enter Select  R Rerun  x Cancel  e Emu  t Test  q Quit  c Check  r Run  l Log", width))
+    add(center("j/k Move  Enter Select  R Rerun  x Cancel  e Emu  m Mirror  t Test  q Quit  c Check  r Run  l Log", width))
 
     local vert_pad = math.floor(math.max(0, height - #content) / 2)
     local lines = {}
@@ -274,7 +293,31 @@ local function refresh_state()
   if flutter_m and proj.type == "flutter" then
     pcall(function() fdevs = flutter_m.list() or {} end)
   end
-  M.state.items = build_items(proj, h_results, dev_list, avd_info, fdevs)
+  -- Scrcpy: gantikan emulator bila ada + replace_emulator (default true)
+  local scrcpy_info = {}
+  local show_emulators = true
+  if scrcpy_m then
+    local found = false
+    pcall(function() found = scrcpy_m.find_binary() ~= nil end)
+    if found then
+      for _, d in ipairs(dev_list) do
+        if d.status == "device" then
+          local running = false
+          pcall(function() running = scrcpy_m.is_running(d.id) end)
+          table.insert(scrcpy_info, { id = d.id, model = d.model, running = running })
+        end
+      end
+      local rep = true
+      pcall(function()
+        local c = require("anvim.config").get()
+        if c and c.scrcpy and c.scrcpy.replace_emulator ~= nil then
+          rep = c.scrcpy.replace_emulator
+        end
+      end)
+      show_emulators = not rep
+    end
+  end
+  M.state.items = build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_info, show_emulators)
   M.state.proj = proj
   if not is_selectable(M.state.items[M.state.selected]) then
     M.state.selected = first_selectable(M.state.items)
@@ -321,6 +364,20 @@ function M.open()
       group = "AnvimDashboard",
       buffer = buf,
       callback = function() M._snap() end,
+    })
+    -- user nutup paksa (:bd/:q) tanpa M.close() → bersihkan state anti-stuck
+    pcall(vim.api.nvim_create_autocmd, "BufWipeout", {
+      group = "AnvimDashboard",
+      buffer = buf,
+      callback = function()
+        M.state.open = false
+        M.state.buf = nil
+        M.state.win = nil
+        M.state.items = {}
+        M.state.selected = 1
+        M.state.proj = nil
+        M.state.sel_line = nil
+      end,
     })
 
     -- health_check.auto: peringatkan tool wajib yang hilang (sekali per buka)
@@ -471,6 +528,11 @@ function M.do_emulator()
   if ok then emu.pick_and_launch() end
 end
 
+function M.do_scrcpy()
+  local ok, scr = pcall(require, "anvim.scrcpy")
+  if ok then scr.pick() end
+end
+
 function M.do_emulator_kill()
   local ok, emu = pcall(require, "anvim.emulator")
   if ok then emu.pick_and_kill() end
@@ -492,6 +554,7 @@ function M.select()
       elseif item.task == "check" then M.do_check()
       elseif item.task == "emulator" then M.do_emulator()
       elseif item.task == "emulator_kill" then M.do_emulator_kill()
+      elseif item.task == "scrcpy" then M.do_scrcpy()
       elseif item.task == "devices" then
         local dl = devices_m.list()
         refresh_state()
@@ -534,6 +597,19 @@ function M.select()
         local ok2, emu = pcall(require, "anvim.emulator")
         if ok2 then emu.launch(a.name, { cold_boot = true }) end
       end
+    elseif item.type == "scrcpy" then
+      local s = item.scrcpy
+      local ok2, scr = pcall(require, "anvim.scrcpy")
+      if ok2 then
+        if s.running then
+          scr.stop(s.id)
+        else
+          scr.launch(s.id, {})
+        end
+        refresh_state()
+        local width3, height3 = current_geom()
+        render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height3, width3)
+      end
     end
   end)
   if not ok then alert.error("select", err) end
@@ -555,6 +631,7 @@ function M.close()
   M.state.proj = nil
   M.state.sel_line = nil
   pcall(vim.api.nvim_clear_autocmds, { group = "AnvimDashboard" })
+  pcall(vim.api.nvim_del_augroup_by_name, "AnvimDashboard")
 end
 
 return M

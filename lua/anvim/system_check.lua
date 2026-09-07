@@ -8,6 +8,7 @@ local util = require("anvim.util")
 
 local OS = util.OS
 local ARCH = util.ARCH
+local WIN_BIN = util.local_bin() -- dipakai check_paths windows
 
 -- Versi minimum yang didukung (selaras Flutter 3.47 / AGP 9.x era).
 M.MIN_VERSIONS = {
@@ -16,16 +17,42 @@ M.MIN_VERSIONS = {
   flutter = { 3 },
   git = { 2 },
   gradle = { 8 },
+  scrcpy = { 2 },
 }
 
 local FLUTTER_VER = "3.47.0"
 local GRADLE_VER = "9.7.1"
+local SCRCPY_VER = "4.1"
+local SCRCPY_BASE = "https://github.com/Genymobile/scrcpy/releases/download/v" .. SCRCPY_VER
 
 local function flutter_macos_file()
   if ARCH == "arm64" then
     return "flutter_macos_arm64_" .. FLUTTER_VER .. "-stable.zip"
   end
   return "flutter_macos_" .. FLUTTER_VER .. "-stable.zip"
+end
+
+--- Download spec scrcpy per-OS (tetap di tools-dir: no_deploy).
+--- Linux ARM64 tanpa aset resmi → nil (fallback post_msg di TOOLS).
+local function scrcpy_download()
+  local sums = SCRCPY_BASE .. "/SHA256SUMS.txt"
+  if OS == "linux" then
+    if ARCH ~= "x86_64" then return nil end
+    local f = "scrcpy-linux-x86_64-v" .. SCRCPY_VER .. ".tar.gz"
+    return {
+      linux = { url = SCRCPY_BASE .. "/" .. f, file = "scrcpy.tar.gz", dir = "scrcpy-linux-x86_64-v" .. SCRCPY_VER, sha256_url = sums, sha256_file = f, no_deploy = true },
+    }
+  elseif OS == "macos" then
+    local f = ARCH == "arm64" and ("scrcpy-macos-aarch64-v" .. SCRCPY_VER .. ".tar.gz") or ("scrcpy-macos-x86_64-v" .. SCRCPY_VER .. ".tar.gz")
+    return {
+      macos = { url = SCRCPY_BASE .. "/" .. f, file = "scrcpy.tar.gz", dir = "scrcpy", sha256_url = sums, sha256_file = f, no_deploy = true },
+    }
+  else
+    local f = "scrcpy-win64-v" .. SCRCPY_VER .. ".zip"
+    return {
+      windows = { url = SCRCPY_BASE .. "/" .. f, file = "scrcpy.zip", dir = "scrcpy-win64-v" .. SCRCPY_VER, sha256_url = sums, sha256_file = f, no_deploy = true },
+    }
+  end
 end
 
 -- ── tool definitions ──
@@ -37,9 +64,9 @@ local TOOLS = {
     url = "https://developer.android.com/studio/command-line",
     ver_arg = "version",
     check_paths = {
-      linux   = { "adb", "~/Android/Sdk/platform-tools/adb", "~/android/platform-tools/adb", "~/.local/bin/adb", "/usr/bin/adb", "/usr/local/bin/adb" },
-      macos   = { "adb", "~/Android/Sdk/platform-tools/adb", "~/Library/Android/sdk/platform-tools/adb", "~/.local/bin/adb", "/usr/local/bin/adb" },
-      windows = { "adb.exe", "~/AppData/Local/Android/Sdk/platform-tools/adb.exe", "C:\\Android\\platform-tools\\adb.exe" },
+      linux   = { "adb", "~/.local/bin/adb", "~/Android/Sdk/platform-tools/adb", "~/android/platform-tools/adb", "/usr/bin/adb", "/usr/local/bin/adb" },
+      macos   = { "adb", "~/.local/bin/adb", "~/Android/Sdk/platform-tools/adb", "~/Library/Android/sdk/platform-tools/adb", "/usr/local/bin/adb" },
+      windows = { "adb.exe", WIN_BIN .. "\\adb.exe", "~/AppData/Local/Android/Sdk/platform-tools/adb.exe", "C:\\Android\\platform-tools\\adb.exe" },
     },
     download = {
       linux   = { url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip", file = "platform-tools-latest-linux.zip", dir = "platform-tools", sha256_url = nil },
@@ -54,8 +81,8 @@ local TOOLS = {
     url = "https://adoptium.net",
     ver_arg = "--version",
     check_paths = {
-      linux   = { "java", "/usr/bin/java", "/usr/lib/jvm/*/bin/java" },
-      macos   = { "java", "/usr/bin/java", "/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java" },
+      linux   = { "java", "~/.local/bin/java", "/usr/bin/java", "/usr/lib/jvm/*/bin/java" },
+      macos   = { "java", "~/.local/bin/java", "/usr/bin/java", "/Library/Java/JavaVirtualMachines/*/Contents/Home/bin/java" },
       windows = { "java.exe", "C:\\Program Files\\Java\\*\\bin\\java.exe", "C:\\Program Files (x86)\\Java\\*\\bin\\java.exe" },
     },
     download = nil,
@@ -63,14 +90,14 @@ local TOOLS = {
   },
   flutter = {
     label = "Flutter", desc = "Flutter SDK — UI multiplatform",
-    bin = (OS == "windows") and "flutter.exe" or "flutter",
+    bin = (OS == "windows") and "flutter.bat" or "flutter",
     hint = "Install Flutter SDK dan set PATH.",
     url = "https://flutter.dev/docs/get-started/install",
     ver_arg = "--version",
     check_paths = {
-      linux   = { "flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/flutter/bin/flutter", "~/.local/bin/flutter" },
-      macos   = { "flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/homebrew/bin/flutter", "~/.local/bin/flutter" },
-      windows = { "flutter.exe", "~/flutter/bin/flutter.exe", "C:\\flutter\\bin\\flutter.exe" },
+      linux   = { "flutter", "~/.local/bin/flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/flutter/bin/flutter" },
+      macos   = { "flutter", "~/.local/bin/flutter", "~/flutter/bin/flutter", "/usr/local/flutter/bin/flutter", "/opt/homebrew/bin/flutter" },
+      windows = { "flutter.bat", WIN_BIN .. "\\flutter.bat", "~/flutter/bin/flutter.bat", "C:\\flutter\\bin\\flutter.bat" },
     },
     download = {
       linux   = { url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_" .. FLUTTER_VER .. "-stable.tar.xz", file = "flutter.tar.xz", dir = "flutter", sha256_url = "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_" .. FLUTTER_VER .. "-stable.tar.xz.sha256" },
@@ -85,8 +112,8 @@ local TOOLS = {
     url = "https://git-scm.com/downloads",
     ver_arg = "--version",
     check_paths = {
-      linux   = { "git", "/usr/bin/git", "/usr/local/bin/git" },
-      macos   = { "git", "/usr/bin/git", "/usr/local/bin/git" },
+      linux   = { "git", "~/.local/bin/git", "/usr/bin/git", "/usr/local/bin/git" },
+      macos   = { "git", "~/.local/bin/git", "/usr/bin/git", "/usr/local/bin/git" },
       windows = { "git.exe", "C:\\Program Files\\Git\\bin\\git.exe" },
     },
     download = nil,
@@ -94,14 +121,14 @@ local TOOLS = {
   },
   gradle = {
     label = "Gradle", desc = "Build tool Android (min 8)",
-    bin = (OS == "windows") and "gradle.exe" or "gradle",
+    bin = (OS == "windows") and "gradle.bat" or "gradle",
     hint = "Install Gradle atau pakai ./gradlew project.",
     url = "https://gradle.org/install",
     ver_arg = "--version",
     check_paths = {
       linux   = { "gradle", "~/.local/bin/gradle", "/usr/bin/gradle", "/usr/local/bin/gradle" },
       macos   = { "gradle", "~/.local/bin/gradle", "/usr/bin/gradle", "/usr/local/bin/gradle" },
-      windows = { "gradle.exe", "C:\\Gradle\\bin\\gradle.exe" },
+      windows = { "gradle.bat", WIN_BIN .. "\\gradle.bat", "C:\\Gradle\\bin\\gradle.bat" },
     },
     download = {
       linux   = { url = "https://services.gradle.org/distributions/gradle-" .. GRADLE_VER .. "-bin.zip", file = "gradle.zip", dir = "gradle-" .. GRADLE_VER, sha256_url = "https://services.gradle.org/distributions/gradle-" .. GRADLE_VER .. "-bin.zip.sha256" },
@@ -117,12 +144,27 @@ local TOOLS = {
     ver_arg = "--version",
     optional = true,
     check_paths = {
-      linux   = { "emulator", "~/Android/Sdk/emulator/emulator", "~/android/emulator/emulator" },
-      macos   = { "emulator", "~/Library/Android/sdk/emulator/emulator", "~/Android/Sdk/emulator/emulator" },
-      windows = { "emulator.exe", "~/AppData/Local/Android/Sdk/emulator/emulator.exe" },
+      linux   = { "emulator", "~/.local/bin/emulator", "~/Android/Sdk/emulator/emulator", "~/android/emulator/emulator", "/usr/bin/emulator", "/usr/local/bin/emulator" },
+      macos   = { "emulator", "~/.local/bin/emulator", "~/Library/Android/sdk/emulator/emulator", "~/Android/Sdk/emulator/emulator", "/usr/local/bin/emulator" },
+      windows = { "emulator.exe", WIN_BIN .. "\\emulator.exe", "~/AppData/Local/Android/Sdk/emulator/emulator.exe" },
     },
     download = nil,
     post_msg = "Install Android SDK Emulator via Android Studio SDK Manager.",
+  },
+  scrcpy = {
+    label = "Scrcpy", desc = "Mirror + kontrol HP (pengganti emulator)",
+    bin = (OS == "windows") and "scrcpy.exe" or "scrcpy",
+    hint = "Install scrcpy via :AnvimCheck atau paket distro.",
+    url = "https://github.com/Genymobile/scrcpy",
+    ver_arg = "--version",
+    optional = true,
+    check_paths = {
+      linux   = { "scrcpy", "~/.local/bin/scrcpy", "~/.anvim/tools/scrcpy/**/scrcpy" },
+      macos   = { "scrcpy", "~/.local/bin/scrcpy", "~/.anvim/tools/scrcpy/**/scrcpy" },
+      windows = { "scrcpy.exe", WIN_BIN .. "\\scrcpy.exe", "~/.anvim/tools/scrcpy/**/scrcpy.exe" },
+    },
+    download = scrcpy_download(),
+    post_msg = "Install scrcpy: paket distro (apt/brew/choco) atau :AnvimCheck (x86_64).",
   },
 }
 
@@ -134,16 +176,46 @@ function M.get_os()
   return OS, ARCH
 end
 
--- ── cari binary ──
+-- ── cari binary (prioritas: bin_dir kanonis → PATH → check_paths →
+--    ANDROID_HOME → folder custom user). Yang ketemu duluan yang ditampilkan.
+local function bin_candidates(spec)
+  local names = { spec.bin }
+  if OS == "windows" then
+    if spec.bin:sub(-4) == ".exe" then
+      table.insert(names, spec.bin:sub(1, -5) .. ".bat")
+    elseif spec.bin:sub(-4) == ".bat" then
+      table.insert(names, spec.bin:sub(1, -5) .. ".exe")
+    else
+      table.insert(names, spec.bin .. ".exe")
+      table.insert(names, spec.bin .. ".bat")
+    end
+  end
+  return names
+end
+
 local function find_tool(name)
   local spec = TOOLS[name]
   if not spec then return nil end
+  local names = bin_candidates(spec)
 
+  -- 1. kanonis: install.bin_dir (default ~/.local/bin)
+  local cfg_ok, cfg = pcall(function() return require("anvim.config").get() end)
+  local bin_dir = (cfg_ok and cfg and cfg.install and cfg.install.bin_dir) or util.local_bin()
+  local sep = OS == "windows" and "\\" or "/"
+  for _, b in ipairs(names) do
+    local p = bin_dir .. sep .. b
+    if vim.fn.executable(p) == 1 then
+      return { found = true, path = p }
+    end
+  end
+
+  -- 2. PATH sistem
   local exe = vim.fn.exepath(spec.check_paths[OS][1])
   if exe and exe ~= "" then
     return { found = true, path = exe }
   end
 
+  -- 3. lokasi umum
   for _, p in ipairs(spec.check_paths[OS]) do
     if not p:find("*", 1, true) then
       local e = vim.fn.expand(p)
@@ -170,6 +242,14 @@ local function find_tool(name)
           return { found = true, path = vim.fn.expand(p) }
         end
       end
+    end
+  end
+
+  -- 5. folder custom user (Downloads/Documents/dll) — fallback terakhir
+  for _, b in ipairs(names) do
+    local hit = util.search_extra_dirs(b, names)
+    if hit then
+      return { found = true, path = hit }
     end
   end
 
@@ -382,6 +462,64 @@ function M.doctor()
   vim.keymap.set("n", "<Esc>", function() util.close_win_buf(win, buf) end, { buffer = buf, nowait = true, silent = true })
 end
 
+--- Rapikan install lama: buang entri ~/.anvim/tools dari PATH session,
+--- pastikan bin_dir di depan, buatkan symlink yang hilang untuk tool yang
+--- sudah ada di tools-dir (tanpa download ulang). Return daftar perbaikan.
+function M.repair()
+  local fixed = {}
+  local cfg_ok, cfg = pcall(function() return require("anvim.config").get() end)
+  local bin_dir = (cfg_ok and cfg and cfg.install and cfg.install.bin_dir) or util.local_bin()
+  local tools_base = (cfg_ok and cfg and cfg.install and cfg.install.dir) or util.tools_dir()
+  local sep = OS == "windows" and ";" or ":"
+
+  -- 1. bersihkan PATH session dari entri tools-dir (sumber detect salah)
+  if OS ~= "windows" then
+    local kept, dropped = {}, 0
+    for p in (vim.env.PATH or ""):gmatch("[^:]+") do
+      if p:find(tools_base, 1, true) then
+        dropped = dropped + 1
+      else
+        table.insert(kept, p)
+      end
+    end
+    if dropped > 0 then
+      vim.env.PATH = table.concat(kept, ":")
+      table.insert(fixed, "PATH dibersihkan (" .. dropped .. " entri tools-dir dibuang)")
+    end
+    if not vim.env.PATH:find(bin_dir, 1, true) then
+      vim.env.PATH = bin_dir .. ":" .. vim.env.PATH
+      table.insert(fixed, "PATH ditambah " .. bin_dir)
+    end
+  end
+
+  -- 2. symlink hilang untuk tool yang file-nya ada di tools-dir
+  if OS ~= "windows" then
+    pcall(vim.fn.mkdir, bin_dir, "p")
+    for _, name in ipairs({ "adb", "flutter", "gradle" }) do
+      local spec = TOOLS[name]
+      if spec then
+        for _, b in ipairs(bin_candidates(spec)) do
+          local link = bin_dir .. "/" .. b
+          if vim.fn.executable(link) ~= 1 then
+            local cands = vim.fn.glob(tools_base .. "/" .. name .. "/**/" .. b, false, true)
+            for _, src in ipairs(cands) do
+              if vim.fn.executable(src) == 1 then
+                pcall(vim.fn.system, "ln -sfn " .. util.esc(src) .. " " .. util.esc(link) .. " 2>&1")
+                if vim.fn.executable(link) == 1 then
+                  table.insert(fixed, b .. " → symlink dari tools-dir")
+                end
+                break
+              end
+            end
+          end
+          if vim.fn.executable(link) == 1 then break end
+        end
+      end
+    end
+  end
+  return fixed
+end
+
 -- ── UI state ──
 M._ui = { buf = nil, win = nil, items = {}, selected = 1 }
 
@@ -533,12 +671,17 @@ end
 
 -- ── interactive check: floating selectable UI (keyboard-driven) ──
 function M.interactive()
+  local repaired = M.repair()
   ui_rebuild()
 
   local missing = M.get_missing()
   local outdated = M.get_outdated()
   if #missing == 0 and #outdated == 0 then
-    alert.ok("All tools detected")
+    if #repaired > 0 then
+      alert.ok("All tools detected (" .. table.concat(repaired, "; ") .. ")")
+    else
+      alert.ok("All tools detected")
+    end
     vim.schedule(function() pcall(require("anvim.dashboard").open) end)
     return
   end
