@@ -6,6 +6,9 @@ M.results = {}
 local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 
+-- namespace khusus: dibersihkan tiap render (lihat dashboard.lua)
+local NS = vim.api.nvim_create_namespace("anvim_check")
+
 local OS = util.OS
 local ARCH = util.ARCH
 local WIN_BIN = util.local_bin() -- dipakai check_paths windows
@@ -615,8 +618,9 @@ local function ui_render()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].modifiable = false
   pcall(require, "anvim.theme")
+  pcall(vim.api.nvim_buf_clear_namespace, buf, NS, 0, -1)
   for _, h in ipairs(hl) do
-    pcall(vim.api.nvim_buf_add_highlight, buf, -1, h.group, h.line - 1, 0, -1)
+    pcall(vim.api.nvim_buf_add_highlight, buf, NS, h.group, h.line - 1, 0, -1)
   end
 end
 

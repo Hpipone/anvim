@@ -7,6 +7,10 @@ local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 pcall(require, "anvim.theme")
 
+-- namespace khusus: dibersihkan tiap render agar highlight basi
+-- (garis/tasks ikut ke-highlight) tidak menumpuk
+local NS = vim.api.nvim_create_namespace("anvim_dashboard")
+
 --- Versi single-source dari config (fallback bila gagal load).
 local function VERSION()
   local ok, c = pcall(function() return require("anvim.config").get() end)
@@ -270,9 +274,11 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
 
+    -- hapus highlight render sebelumnya (set_lines tidak hapus extmark)
+    pcall(vim.api.nvim_buf_clear_namespace, buf, NS, 0, -1)
     for i, g in ipairs(marks) do
       if g then
-        pcall(vim.api.nvim_buf_add_highlight, buf, -1, g, vert_pad + i - 1, 0, -1)
+        pcall(vim.api.nvim_buf_add_highlight, buf, NS, g, vert_pad + i - 1, 0, -1)
       end
     end
 

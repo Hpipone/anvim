@@ -546,4 +546,21 @@ return function(ctx)
     assert(table.concat(shown, "\n"):find("v9.9.9", 1, true), "versi config harus tampil")
     dash.close()
   end)
+
+  run("dashboard: render clear highlight basi tiap render", function()
+    local cleared = 0
+    mock.raw("api.nvim_buf_clear_namespace", function() cleared = cleared + 1 end)
+    dash.state.open = true
+    dash.state.buf = 11
+    dash.state.win = 22
+    dash.state.items = {
+      { type = "task", label = "a", task = "run", icon = "▶" },
+      { type = "task", label = "b", task = "check", icon = "⚡" },
+    }
+    dash.state.selected = 1
+    dash.state.proj = { name = "test", type = "android" }
+    dash.nav(1)
+    dash.nav(-1)
+    assert(cleared >= 2, "clear_namespace harus jalan tiap render, got " .. cleared)
+  end)
 end
