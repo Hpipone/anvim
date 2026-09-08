@@ -162,6 +162,9 @@ anvim checks only the tools relevant to your project type:
 Missing tools show a clear message with install instructions.
 Use :AnvimCheck anytime to re-run the health check.
 
+The dashboard never scans on open (instant); it shows the last check
+result, or a hint to press c. You trigger scans yourself.
+
 ==============================================================================
 7. LICENSE                                            *anvim-license*
 

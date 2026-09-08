@@ -191,6 +191,13 @@ function M.get_tools_spec()
   return TOOLS
 end
 
+--- Hasil cek terakhir (tanpa spawn). Dipakai dashboard agar buka instan;
+--- scan sungguhan hanya saat user trigger (:AnvimCheck / c).
+function M.last_results()
+  if type(M.results) == "table" then return M.results end
+  return {}
+end
+
 --- Tool yang relevan per tipe project (git selalu ikut sebagai info).
 --- Dashboard + auto-warn pakai ini agar tidak menagih tool tak relevan
 --- (mis. flutter untuk project node).

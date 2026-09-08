@@ -165,10 +165,15 @@ local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_in
   table.insert(items, { type = "header", text = "System" })
   table.insert(items, { type = "task", label = "Check System Tools", task = "check", icon = "⚡" })
   table.insert(items, { type = "header", text = "Info" })
+  local n_info = 0
   if h_results then
     for _, name in ipairs(util.sorted_tool_names(h_results)) do
       table.insert(items, { type = "health", tool = name, result = h_results[name] })
+      n_info = n_info + 1
     end
+  end
+  if n_info == 0 then
+    table.insert(items, { type = "hint", text = "(not checked yet — press c)" })
   end
   return items
 end
@@ -303,16 +308,12 @@ local function refresh_state(slow)
   if slow == nil then slow = true end
   local proj = project_m.detect()
   local dev_list = devices_m.list()
-  -- toolset mengikuti tipe project (node tak ditagih flutter, dst.);
-  -- user bisa memaksa via health_check.tools = {...}
-  local tools = nil
-  local ok_c, c = pcall(function() return require("anvim.config").get() end)
-  if ok_c and c and c.health_check and c.health_check.tools then tools = c.health_check.tools end
-  if not tools and syscheck_m.required_tools then
-    tools = syscheck_m.required_tools(proj.type)
-  end
-  tools = tools or { "adb", "java", "git", "flutter", "gradle" }
-  local h_results = syscheck_m.check_all(tools, slow and nil or { deep = false })
+  -- TIDAK scan di sini: dashboard buka instan. Hasil tool diambil dari
+  -- cek terakhir (:AnvimCheck / c); kosong → hint, bukan spawn.
+  local h_results = {}
+  pcall(function()
+    if syscheck_m.last_results then h_results = syscheck_m.last_results() or {} end
+  end)
   -- AVD info: lambat (spawn emulator binary + adb per device) → fase slow saja
   local avd_info = {}
   if slow and emulator_m then
@@ -462,28 +463,6 @@ function M.open()
         M.state.sel_line = nil
       end,
     })
-
-    -- health_check.auto: peringatkan tool wajib yang hilang (sekali per buka)
-    pcall(function()
-      local cfg = config_m.get()
-      if cfg and cfg.health_check and cfg.health_check.auto then
-        local missing, outdated = {}, {}
-        for _, it in ipairs(M.state.items) do
-          if it.type == "health" and it.result then
-            if it.result.status == "missing" and not it.result.optional then
-              table.insert(missing, it.result.label or it.tool)
-            elseif it.result.status == "old" then
-              table.insert(outdated, it.result.label or it.tool)
-            end
-          end
-        end
-        if #missing > 0 then
-          alert.warn("Missing: " .. table.concat(missing, ", ") .. " — press c to install.")
-        elseif #outdated > 0 then
-          alert.warn("Outdated: " .. table.concat(outdated, ", ") .. " — consider upgrading.")
-        end
-      end
-    end)
   end)
   if not ok then
     alert.error("open dashboard", err)

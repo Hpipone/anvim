@@ -86,3 +86,8 @@
 - [x] Alerts English konsisten
 - [x] Tests 140 pass (17 suites)
 
+
+## Fase 10 — no scan on dashboard open (DONE, v1.4.0)
+- [x] Dashboard tidak panggil check_all (pakai last_results cache + hint press c)
+- [x] Hapus auto-warn + health_check.auto dari defaults (scan hanya user-trigger)
+- [x] Tests 142 pass (17 suites)

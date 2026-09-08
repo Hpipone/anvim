@@ -401,26 +401,46 @@ return function(ctx)
     assert(stopped == "RF123", "got " .. tostring(stopped))
   end)
 
-  run("dashboard: auto warn saat tool hilang", function()
-    package.loaded["anvim.config"] = {
-      get = function() return {
-        dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
-        health_check = { tools = { "adb" }, auto = true },
-        tasks = { custom = {} },
-      } end,
-    }
+  run("dashboard: tanpa scan saat buka (pakai cache)", function()
+    local scanned = false
     package.loaded["anvim.system_check"] = {
-      check_all = function() return {
-        adb = { found = false, label = "ADB", status = "missing", hint = "install", optional = false },
-      } end,
-      format_line = function() return "✗ missing" end,
+      check_all = function() scanned = true return {} end,
+      last_results = function()
+        return { adb = { found = true, path = "/usr/bin/adb", label = "ADB", status = "ok" } }
+      end,
+      format_line = function(_, r) return r.found and "✓ ok" or "✗ missing" end,
     }
     package.loaded["anvim.dashboard"] = nil
     dash = require("anvim.dashboard")
     dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
     alert_state.warn_called = false
     dash.open()
-    assert(alert_state.warn_called == true, "auto health harus warn")
+    assert(scanned == false, "dashboard tidak boleh scan saat buka")
+    assert(alert_state.warn_called == false, "tanpa warn otomatis")
+    local has_health = false
+    for _, it in ipairs(dash.state.items) do
+      if it.type == "health" and it.tool == "adb" then has_health = true end
+    end
+    assert(has_health == true, "hasil cache harus tampil")
+    dash.close()
+  end)
+
+  run("dashboard: hint bila belum pernah cek", function()
+    package.loaded["anvim.system_check"] = {
+      check_all = function() error("must not scan") end,
+      last_results = function() return {} end,
+      format_line = function() return "x" end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    local hint = false
+    for _, it in ipairs(dash.state.items) do
+      if it.type == "hint" and tostring(it.text):find("press c") then hint = true end
+    end
+    assert(hint == true, "hint press c harus ada")
+    dash.close()
   end)
 
   run("dashboard: open tahan walau section lambat error", function()
@@ -489,22 +509,19 @@ return function(ctx)
     dash.close()
   end)
 
-  run("dashboard: node cek node + label npm", function()
-    local got_tools
+  run("dashboard: node label npm tanpa scan", function()
+    local scanned = false
     package.loaded["anvim.config"] = {
       get = function() return {
         dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
-        health_check = { auto = false }, -- tanpa tools = auto scoped
+        health_check = {},
         tasks = { custom = {} },
       } end,
     }
     package.loaded["anvim.system_check"] = {
-      check_all = function(tools, _) got_tools = tools return {} end,
+      check_all = function() scanned = true return {} end,
+      last_results = function() return {} end,
       format_line = function() return "x" end,
-      required_tools = function(t)
-        if t == "node" then return { "node", "git" } end
-        return { "adb", "java", "git", "flutter", "gradle" }
-      end,
     }
     package.loaded["anvim.project"] = {
       detect = function() return { name = "web", type = "node", branch = "main", root = "/tmp/web", scripts = { dev = "x" } } end,
@@ -513,9 +530,7 @@ return function(ctx)
     dash = require("anvim.dashboard")
     dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
     dash.open()
-    local has_node = false
-    for _, t in ipairs(got_tools) do if t == "node" then has_node = true end end
-    assert(has_node == true, "node harus dicek: " .. table.concat(got_tools, ","))
+    assert(scanned == false, "dashboard node pun tidak boleh scan")
     local label_ok = false
     for _, it in ipairs(dash.state.items) do
       if it.type == "task" and it.task == "run" and it.label:find("npm") then label_ok = true end

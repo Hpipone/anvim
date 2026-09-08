@@ -6,7 +6,7 @@
 
 ## Features
 
-- **Dashboard** — floating window, keyboard-only (`j/k`, no horizontal drift), LSP diagnostics, auto health warnings, instant open (slow sections load async)
+- **Dashboard** — floating window, keyboard-only (`j/k`, no horizontal drift), LSP diagnostics, instant open (never scans on open; shows last check, `c` to scan)
 - **Projects** — Flutter, Android/Gradle, **and Node** (`package.json` scripts: `npm run dev/build/test`). No forced installs: run works with whatever runner the project uses. Nearest marker wins in monorepos; force via `setup({project={type="node"}})` or `.anvim.json`
 - **System check** — checks only tools relevant to your project type (Node is never nagged about Flutter); detects ADB, Java, Flutter, Git, Gradle (+Emulator, +Scrcpy), enforces minimum versions, one-key auto-install (optional tools offered too)
 - **Device sections** — Emulator/Scrcpy appear only when an adb device is connected, hidden otherwise
@@ -81,7 +81,7 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | Command | Action |
 |---|---|
 | `:Anvim` | Dashboard (`<leader>ad`) |
-| `:AnvimCheck` | System check + installer |
+| `:AnvimCheck` | System check + installer (the only scan; dashboard just displays it) |
 | `:AnvimDoctor` | Environment issues (ANDROID_HOME, emulator) |
 | `:AnvimRun` / `:AnvimTest` / `:AnvimRerun` / `:AnvimCustom` | Tasks |
 | `:AnvimLogcat` (`<leader>al`) / `:AnvimLogcatSave [path]` | Logs |

@@ -14,7 +14,9 @@ M.defaults = {
     min_height = 14,
   },
   health_check = {
-    auto = true,
+    -- tools = nil  →  otomatis mengikuti tipe project (scoped).
+    -- Dashboard TIDAK scan saat dibuka (buka instan); scan hanya via
+    -- :AnvimCheck atau tombol c, hasilnya di-cache untuk dashboard.
     tools = nil, -- nil = otomatis mengikuti tipe project (scoped)
   },
   project = {
