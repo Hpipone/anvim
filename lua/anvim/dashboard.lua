@@ -206,12 +206,15 @@ end
 local function render(buf, items, selected, proj, dev_active, height, width)
   local ok, err = pcall(function()
     local content = {}
-    local marks = {}
+    local hlmarks = {}
     local cur_sel_line = nil
 
     local function add(l, g)
       table.insert(content, l)
-      table.insert(marks, g)
+      -- JANGAN table.insert(marks, g): g=nil adalah no-op diam-diam di
+      -- LuaJIT sehingga array memadat dan highlight bergeser baris.
+      -- Simpan pasangan (baris, grup) hanya untuk yang ber-grup.
+      if g then table.insert(hlmarks, { line = #content, group = g }) end
     end
 
     add(center("a n v i m", width), "AnvimTitle")
@@ -281,10 +284,8 @@ local function render(buf, items, selected, proj, dev_active, height, width)
 
     -- hapus highlight render sebelumnya (set_lines tidak hapus extmark)
     pcall(vim.api.nvim_buf_clear_namespace, buf, NS, 0, -1)
-    for i, g in ipairs(marks) do
-      if g then
-        pcall(vim.api.nvim_buf_add_highlight, buf, NS, g, vert_pad + i - 1, 0, -1)
-      end
+    for _, h in ipairs(hlmarks) do
+      pcall(vim.api.nvim_buf_add_highlight, buf, NS, h.group, vert_pad + h.line - 1, 0, -1)
     end
 
     if cur_sel_line then

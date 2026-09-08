@@ -578,4 +578,35 @@ return function(ctx)
     dash.nav(-1)
     assert(cleared >= 2, "clear_namespace harus jalan tiap render, got " .. cleared)
   end)
+
+  run("dashboard: highlight tepat di baris item terpilih", function()
+    local shown = {}
+    local hls = {}
+    mock.raw("api.nvim_buf_set_lines", function(_, _, _, _, lines)
+      shown = {}
+      for _, l in ipairs(lines or {}) do table.insert(shown, l) end
+    end)
+    mock.raw("api.nvim_buf_clear_namespace", function() end)
+    mock.raw("api.nvim_buf_add_highlight", function(_, _, group, line)
+      table.insert(hls, { group = group, line = line })
+    end)
+    dash.state.open = true
+    dash.state.buf = 11
+    dash.state.win = 22
+    dash.state.items = {
+      { type = "header", text = "Tasks" },
+      { type = "task", label = "Run App", task = "run", icon = "▶" },
+      { type = "task", label = "Clean", task = "clean", icon = "◐" },
+    }
+    dash.state.selected = 3
+    dash.state.proj = { name = "test", type = "android" }
+    dash.nav(0)
+    local sel = {}
+    for _, h in ipairs(hls) do
+      if h.group == "AnvimSelected" then table.insert(sel, h) end
+    end
+    assert(#sel == 1, "tepat 1 Selected, got " .. #sel)
+    local line = shown[sel[1].line + 1] or ""
+    assert(line:find("Clean", 1, true), "Selected harus di baris Clean, got [" .. line .. "]")
+  end)
 end
