@@ -4,7 +4,7 @@
 local M = {}
 
 M.defaults = {
-  version = "1.6.5",
+  version = "1.6.6",
   dashboard = {
     width = 0.8,
     height = 0.8,
@@ -44,11 +44,6 @@ M.defaults = {
   },
   scrcpy = {
     replace_emulator = true,
-    max_size = 1920,
-    bit_rate = "8M",
-    audio = false,
-    stay_awake = true,
-    turn_screen_off = true,
   },
 }
 

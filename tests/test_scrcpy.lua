@@ -24,7 +24,7 @@ return function(ctx)
     package.loaded["anvim.status-alert"] = { info = function() end, warn = function() end, error = function() end, ok = function() end, debug = function() end }
     package.loaded["anvim.config"] = {
       get = function()
-        return { scrcpy = { replace_emulator = true, max_size = 1920, bit_rate = "8M", audio = false, stay_awake = true, turn_screen_off = true } }
+        return { scrcpy = { replace_emulator = true } }
       end,
     }
     package.loaded["anvim.devices"] = {
@@ -40,19 +40,14 @@ return function(ctx)
     assert(s.find_binary() == "/home/testuser/.anvim/tools/scrcpy/scrcpy")
   end)
 
-  run("scrcpy: build_cmd flag full-custom", function()
+  run("scrcpy: build_cmd polos -s id saja", function()
     setup()
     package.loaded["anvim.scrcpy"] = nil
     package.loaded["anvim.util"] = nil
     local s = require("anvim.scrcpy")
     local cmd = s.build_cmd("RF123", {})
-    local j = table.concat(cmd, " ")
-    assert(j:find("%-s RF123"), j)
-    assert(j:find("%-%-max%-size 1920"), j)
-    assert(j:find("%-%-video%-bit%-rate 8M"), j)
-    assert(j:find("%-%-no%-audio"), j)
-    assert(j:find("%-%-stay%-awake"), j)
-    assert(j:find("%-%-turn%-screen%-off"), j)
+    assert(#cmd == 3, "hanya bin -s id, got " .. table.concat(cmd, " "))
+    assert(cmd[2] == "-s" and cmd[3] == "RF123")
   end)
 
   run("scrcpy: tanpa record (dilarang)", function()

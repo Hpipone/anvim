@@ -8,21 +8,6 @@ local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 local OS = util.OS
 
-local function cfg()
-  local ok, c = pcall(function() return require("anvim.config").get() end)
-  local s = (ok and c and c.scrcpy) or {}
-  return {
-    replace_emulator = s.replace_emulator ~= false,
-    max_size = s.max_size or 1920,
-    bit_rate = s.bit_rate or "8M",
-    audio = s.audio or false,
-    stay_awake = s.stay_awake ~= false,
-    turn_screen_off = s.turn_screen_off ~= false,
-  }
-end
-
-M._cfg = cfg
-
 --- Cari binary scrcpy: PATH → tools-dir (no_deploy) → local/bin.
 function M.find_binary()
   local bin = OS == "windows" and "scrcpy.exe" or "scrcpy"
@@ -37,21 +22,11 @@ function M.find_binary()
   return nil
 end
 
---- Susun argv scrcpy. opts menimpa config: {extra={...}}.
---- Tanpa record (bikin device lag + layar HP mati tak terlihat).
+--- Susun argv scrcpy: polos `-s <id>` + extra user. Tanpa flag bawaan.
 function M.build_cmd(device_id, opts)
   opts = opts or {}
-  local c = cfg()
-  for k, v in pairs(opts) do
-    if k ~= "extra" then c[k] = v end
-  end
   local bin = M.find_binary() or (OS == "windows" and "scrcpy.exe" or "scrcpy")
   local cmd = { bin, "-s", device_id }
-  if c.max_size then vim.list_extend(cmd, { "--max-size", tostring(c.max_size) }) end
-  if c.bit_rate then vim.list_extend(cmd, { "--video-bit-rate", tostring(c.bit_rate) }) end
-  if not c.audio then table.insert(cmd, "--no-audio") end
-  if c.stay_awake then table.insert(cmd, "--stay-awake") end
-  if c.turn_screen_off then table.insert(cmd, "--turn-screen-off") end
   for _, a in ipairs(opts.extra or {}) do table.insert(cmd, a) end
   return cmd
 end
