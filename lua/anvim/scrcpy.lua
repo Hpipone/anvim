@@ -18,7 +18,6 @@ local function cfg()
     audio = s.audio or false,
     stay_awake = s.stay_awake ~= false,
     turn_screen_off = s.turn_screen_off ~= false,
-    record_dir = s.record_dir or "~/Videos",
   }
 end
 
@@ -38,12 +37,13 @@ function M.find_binary()
   return nil
 end
 
---- Susun argv scrcpy. opts menimpa config: {record=true|path, extra={...}}.
+--- Susun argv scrcpy. opts menimpa config: {extra={...}}.
+--- Tanpa record (bikin device lag + layar HP mati tak terlihat).
 function M.build_cmd(device_id, opts)
   opts = opts or {}
   local c = cfg()
   for k, v in pairs(opts) do
-    if k ~= "extra" and k ~= "record" then c[k] = v end
+    if k ~= "extra" then c[k] = v end
   end
   local bin = M.find_binary() or (OS == "windows" and "scrcpy.exe" or "scrcpy")
   local cmd = { bin, "-s", device_id }
@@ -52,15 +52,6 @@ function M.build_cmd(device_id, opts)
   if not c.audio then table.insert(cmd, "--no-audio") end
   if c.stay_awake then table.insert(cmd, "--stay-awake") end
   if c.turn_screen_off then table.insert(cmd, "--turn-screen-off") end
-  if opts.record then
-    local path = opts.record
-    if path == true then
-      local dir = vim.fn.expand(c.record_dir)
-      pcall(vim.fn.mkdir, dir, "p")
-      path = dir .. "/scrcpy-" .. device_id:gsub("[^%w%-]", "_") .. "-" .. os.date("%Y%m%d-%H%M%S") .. ".mp4"
-    end
-    vim.list_extend(cmd, { "--record", path })
-  end
   for _, a in ipairs(opts.extra or {}) do table.insert(cmd, a) end
   return cmd
 end
@@ -109,7 +100,7 @@ function M.launch(device_id, opts, on_done)
     return
   end
   local cmd = M.build_cmd(device_id, opts)
-  alert.info("Scrcpy: " .. device_id .. (opts.record and " (+record)" or ""))
+  alert.info("Scrcpy: " .. device_id)
   local job = vim.fn.jobstart(cmd, {
     on_exit = function(_, code)
       M.jobs[device_id] = nil
@@ -150,7 +141,7 @@ function M._id_from_label(label)
   return label:match("%s%s(%S+)")
 end
 
---- Picker: pilih device → aksi Mirror / Mirror+Record / Stop.
+--- Picker: pilih device → scrcpy langsung (stop bila jalan). Tanpa record.
 function M.pick()
   local ok, dev = pcall(require, "anvim.devices")
   if not ok then return end
@@ -160,6 +151,10 @@ function M.pick()
   end
   if #list == 0 then
     alert.warn("No online devices for scrcpy.")
+    return
+  end
+  if #list == 1 and not M.jobs[list[1].id] then
+    M.launch(list[1].id, {})
     return
   end
   local labels = {}
@@ -175,10 +170,7 @@ function M.pick()
       M.stop(id)
       return
     end
-    vim.ui.select({ "Scrcpy", "Scrcpy + Record" }, { prompt = "Scrcpy " .. id .. ":" }, function(action)
-      if not action then return end
-      M.launch(id, { record = action:find("Record") ~= nil })
-    end)
+    M.launch(id, {})
   end)
 end
 

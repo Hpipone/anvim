@@ -24,7 +24,7 @@ return function(ctx)
     package.loaded["anvim.status-alert"] = { info = function() end, warn = function() end, error = function() end, ok = function() end, debug = function() end }
     package.loaded["anvim.config"] = {
       get = function()
-        return { scrcpy = { replace_emulator = true, max_size = 1920, bit_rate = "8M", audio = false, stay_awake = true, turn_screen_off = true, record_dir = "~/Videos" } }
+        return { scrcpy = { replace_emulator = true, max_size = 1920, bit_rate = "8M", audio = false, stay_awake = true, turn_screen_off = true } }
       end,
     }
     package.loaded["anvim.devices"] = {
@@ -55,14 +55,14 @@ return function(ctx)
     assert(j:find("%-%-turn%-screen%-off"), j)
   end)
 
-  run("scrcpy: build_cmd record path", function()
+  run("scrcpy: tanpa record (dilarang)", function()
     setup()
     package.loaded["anvim.scrcpy"] = nil
     package.loaded["anvim.util"] = nil
     local s = require("anvim.scrcpy")
     local cmd = s.build_cmd("RF123", { record = "/tmp/r.mp4" })
     local j = table.concat(cmd, " ")
-    assert(j:find("%-%-record /tmp/r.mp4"), j)
+    assert(not j:find("%-%-record", 1, true), "record harus hilang: " .. j)
   end)
 
   run("scrcpy: id_from_label", function()

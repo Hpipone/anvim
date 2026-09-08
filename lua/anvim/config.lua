@@ -4,7 +4,7 @@
 local M = {}
 
 M.defaults = {
-  version = "1.6.2",
+  version = "1.6.3",
   dashboard = {
     width = 0.8,
     height = 0.8,
@@ -49,7 +49,6 @@ M.defaults = {
     audio = false,
     stay_awake = true,
     turn_screen_off = true,
-    record_dir = "~/Videos",
   },
 }
 

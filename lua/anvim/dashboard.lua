@@ -132,7 +132,7 @@ local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_in
         table.insert(items, { type = "scrcpy", label = string.format("○ %s (%s) — scrcpy", s.model or "device", s.id), scrcpy = s })
       end
     end
-    table.insert(items, { type = "task", label = "Scrcpy… (scrcpy/record/stop)", task = "scrcpy", icon = "◉" })
+    table.insert(items, { type = "task", label = "Scrcpy… (scrcpy/stop)", task = "scrcpy", icon = "◉" })
   elseif scrcpy_hint then
     table.insert(items, { type = "hint", text = "(scrcpy — c → check untuk install)" })
   end

@@ -17,7 +17,7 @@ CONTENTS                                     *anvim*
 anvim is a TUI dashboard for Android and Flutter development inside Neovim.
 It provides an interactive keyboard-driven interface for running tasks,
 viewing logcat, and managing devices — eliminating the need for Android Studio.
-Version 1.6.2.
+Version 1.6.3.
 
 Features:
   - Project auto-detection (Flutter vs Android/Gradle vs Node/npm, git-root aware)
@@ -27,7 +27,7 @@ Features:
   - Logcat viewer with live filtering (*:LEVEL)
   - Device management (multi-device -s, ANDROID_SERIAL for Gradle, persistent)
   - Emulator/Scrcpy sections auto-hide without adb devices
-  - Scrcpy show + record (replaces emulator section when installed)
+  - Scrcpy show + control (replaces emulator section when installed)
   - Emulator manager (list AVD, launch cold/quick/wipe, kill, boot wait)
   - Theming via highlight groups, LSP diagnostics in dashboard
   - Emulator manager (list AVD, launch cold/quick/wipe, kill, boot wait)
@@ -69,7 +69,7 @@ binaries are copied to ~/.local/bin/ (no sudo).
   :AnvimHelp       Open this help
   :AnvimEmulator   Launch Android emulator (picker)
   :AnvimEmulatorKill Kill running emulator
-  :AnvimScrcpy     Scrcpy picker (scrcpy/record/stop)
+  :AnvimScrcpy     Scrcpy picker (scrcpy/stop)
   :AnvimScrcpyKill Stop running scrcpy
   :AnvimAdb        adb console (command toggle)
   :AnvimTaskClose  Close task output window
@@ -145,7 +145,6 @@ Logcat viewer:
       audio = false,
       stay_awake = true,
       turn_screen_off = true,
-      record_dir = "~/Videos",
     },
   })
 <

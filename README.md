@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.6.2** — Stable (pair robust, logcat back to dashboard)
+> **v1.6.3** — Stable (honest connect, no record)
 
 ## Features
 
@@ -16,7 +16,7 @@
 - **Logcat** — live view, level/tag filters, save to file, clipboard copy
 - **Devices** — multi-device select (`-s` everywhere, `ANDROID_SERIAL` for Gradle), offline/unauthorized warnings, persistent active device
 - **Emulator** — list AVDs, launch (cold/quick/wipe), kill, boot wait + auto-select
-- **Scrcpy** — show + control phone per device, record to `~/Videos`, custom flags; replaces emulator section when installed (install via `:AnvimCheck`)
+- **Scrcpy** — show + control phone per device, custom flags; replaces emulator section when installed (install via `:AnvimCheck`)
 
 ## Requirements
 
@@ -60,7 +60,6 @@ return {
       audio = false, -- true = forward audio too
       stay_awake = true,
       turn_screen_off = true,
-      record_dir = "~/Videos",
     },
   },
 }

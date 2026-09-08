@@ -196,8 +196,8 @@ function M.adb_exec(argv, opts, on_done)
     on_done(false)
     return
   end
-  tasks.run_custom(cmd, "adb " .. table.concat(argv, " "), function(_, ok)
-    on_done(ok)
+  tasks.run_custom(cmd, "adb " .. table.concat(argv, " "), function(output, ok)
+    on_done(output, ok)
   end)
 end
 
@@ -321,7 +321,28 @@ function M.adb_pick(on_done)
           on_done(false)
           return
         end
-        M.adb_exec({ "connect", target }, { device = false }, on_done)
+        -- adb connect exit 0 walau gagal ("failed to connect...")!
+        -- Verifikasi via isi output + device benar muncul di list.
+        M.adb_exec({ "connect", target }, { device = false }, function(output, ok)
+          local blob = string.lower(tostring(output or ""))
+          local said_ok = blob:find("connected to", 1, true) or blob:find("already connected", 1, true)
+          local present = false
+          if said_ok then
+            pcall(function()
+              for _, d in ipairs(M.list()) do
+                if d.id == target and d.status == "device" then present = true end
+              end
+            end)
+          end
+          if ok and said_ok and present then
+            on_done(true)
+          else
+            local reason = blob:match("[^\r\n]*failed[^\r\n]*") or blob:match("[^\r\n]*refused[^\r\n]*")
+              or "device not in list — same wifi? wireless debugging on?"
+            alert.error("connect", target .. ": " .. vim.trim(reason))
+            on_done(false)
+          end
+        end)
       end)
       return
     end
