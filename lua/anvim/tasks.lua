@@ -1,7 +1,7 @@
 -- anvim: task execution engine — timeout, device -s, split output + quickfix
 
 local M = {}
-M.state = { running = false, current = nil, job_id = nil, buf = nil, win = nil, gen = 0, last = nil }
+M.state = { running = false, current = nil, job_id = nil, buf = nil, win = nil, gen = 0, last = nil, last_output = nil }
 local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 
@@ -178,6 +178,8 @@ local function ensure_output_win()
       { buffer = buf, nowait = true, silent = true, desc = "Close task output" })
     pcall(vim.keymap.set, "n", "<Esc>", function() M.close_output() end,
       { buffer = buf, nowait = true, silent = true, desc = "Close task output" })
+    pcall(vim.keymap.set, "n", "S", function() M.save() end,
+      { buffer = buf, nowait = true, silent = true, desc = "Save task output" })
   end
   local win = M.state.win
   if not (win and vim.api.nvim_win_is_valid(win)) then
@@ -305,6 +307,7 @@ local function run_cmd(cmd, label, cwd, on_done, env)
       local success = code == 0
       -- quickfix tetap terisi; sinyal selesai = notify (tanpa log done)
       pcall(vim.fn.setqflist, {}, " ", { title = "anvim:" .. label, lines = out_lines })
+      M.state.last_output = { label = label, lines = out_lines, success = success }
       if success then
         alert.ok("Task completed: " .. label)
       else
@@ -442,6 +445,29 @@ function M.rerun(on_done)
   end
   M.run(proj, last.task, on_done)
   return true
+end
+
+--- Simpan output task terakhir ke file (mirroring logcat.save).
+--- Return path atau nil (warn bila belum ada output).
+function M.save(path)
+  local last = M.state.last_output
+  if not last or not last.lines then
+    alert.warn("No task output yet — run something first.")
+    return nil
+  end
+  if not path or path == "" then
+    local slug = tostring(last.label or "task"):gsub("[^%w%-]+", "-"):sub(1, 30)
+    path = vim.fn.expand("~/anvim-task-" .. slug .. "-" .. os.date("%Y%m%d-%H%M%S") .. ".log")
+  end
+  local lines = { "$ anvim: " .. tostring(last.label or ""), "" }
+  for _, l in ipairs(last.lines) do table.insert(lines, l) end
+  local ok, err = pcall(vim.fn.writefile, lines, path)
+  if not ok then
+    alert.error("task save", err)
+    return nil
+  end
+  alert.ok("Task output saved: " .. path .. " (" .. #last.lines .. " lines)")
+  return path
 end
 
 return M

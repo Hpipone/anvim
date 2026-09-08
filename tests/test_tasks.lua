@@ -310,4 +310,30 @@ return function(ctx)
       assert(not l:find("done:", 1, true), "log done harus hilang: " .. l)
     end
   end)
+
+  run("tasks: save tulis output terakhir", function()
+    setup()
+    local written
+    mock.raw("fn.writefile", function(lines, path) written = { lines = lines, path = path } return 0 end)
+    mock.raw("fn.expand", function(s) return (s:gsub("~", "/home/testuser")) end)
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean")
+    local path = t.save("/tmp/task.log")
+    assert(path == "/tmp/task.log")
+    assert(#written.lines > 1, "header + output")
+    assert(written.lines[1]:find("anvim:", 1, true), "header label")
+  end)
+
+  run("tasks: save tolak bila kosong", function()
+    setup()
+    local warned = false
+    package.loaded["anvim.status-alert"] = { info = function() end,
+      warn = function() warned = true end, error = function() end, ok = function() end }
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.state.last_output = nil
+    assert(t.save("/tmp/x.log") == nil)
+    assert(warned == true)
+  end)
 end

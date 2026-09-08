@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.6.8** — Stable (honest connect, no record)
+> **v1.6.9** — Stable (honest connect, no record)
 
 ## Features
 
@@ -88,6 +88,7 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | `:AnvimScrcpy` / `:AnvimScrcpyKill` | Show phone screen |
 | `:AnvimAdb` | adb console with command toggle |
 | `:AnvimTaskClose` | Close task output window (q works too, returns to dashboard) |
+| `:AnvimTaskSave [path]` | Save last task output to file (S in output window) |
 | `:AnvimHelp` | Help |
 
 Logcat keys: `V/D/I/W/E/F` level, `T` tag, `S` save, `yy` copy line, `/` search.
@@ -97,7 +98,7 @@ Custom tasks appear in the dashboard (★). No line highlights at all — cursor
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 166 unit tests, no framework
+nvim --headless -l tests/run.lua   # 168 unit tests, no framework
 ```
 
 ## Roadmap
