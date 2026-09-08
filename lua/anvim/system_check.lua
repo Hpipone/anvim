@@ -156,7 +156,7 @@ local TOOLS = {
     post_msg = "Install Android SDK Emulator via Android Studio SDK Manager.",
   },
   scrcpy = {
-    label = "Scrcpy", desc = "Mirror + control phone (replaces emulator)",
+    label = "Scrcpy", desc = "Show + control phone (replaces emulator)",
     bin = (OS == "windows") and "scrcpy.exe" or "scrcpy",
     hint = "Install scrcpy via :AnvimCheck or a distro package.",
     url = "https://github.com/Genymobile/scrcpy",

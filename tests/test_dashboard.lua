@@ -579,7 +579,7 @@ return function(ctx)
     assert(cleared >= 2, "clear_namespace harus jalan tiap render, got " .. cleared)
   end)
 
-  run("dashboard: highlight tepat di baris item terpilih", function()
+  run("dashboard: highlight hanya info + cursor", function()
     local shown = {}
     local hls = {}
     mock.raw("api.nvim_buf_set_lines", function(_, _, _, _, lines)
@@ -590,23 +590,32 @@ return function(ctx)
     mock.raw("api.nvim_buf_add_highlight", function(_, _, group, line)
       table.insert(hls, { group = group, line = line })
     end)
-    dash.state.open = true
-    dash.state.buf = 11
-    dash.state.win = 22
+    package.loaded["anvim.system_check"] = {
+      check_all = function() return {} end,
+      last_results = function()
+        return { adb = { found = true, path = "/usr/bin/adb", label = "ADB", status = "ok" } }
+      end,
+      format_line = function() return "ok" end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
     dash.state.items = {
       { type = "header", text = "Tasks" },
       { type = "task", label = "Run App", task = "run", icon = "▶" },
-      { type = "task", label = "Clean", task = "clean", icon = "◐" },
+      { type = "health", tool = "adb", result = { found = true, label = "ADB", status = "ok" } },
     }
-    dash.state.selected = 3
+    dash.state.selected = 2
     dash.state.proj = { name = "test", type = "android" }
+    hls = {}
     dash.nav(0)
-    local sel = {}
+    local sel_n, ok_n = 0, 0
     for _, h in ipairs(hls) do
-      if h.group == "AnvimSelected" then table.insert(sel, h) end
+      if h.group == "AnvimSelected" then sel_n = sel_n + 1 end
+      if h.group == "AnvimOk" then ok_n = ok_n + 1 end
     end
-    assert(#sel == 1, "tepat 1 Selected, got " .. #sel)
-    local line = shown[sel[1].line + 1] or ""
-    assert(line:find("Clean", 1, true), "Selected harus di baris Clean, got [" .. line .. "]")
+    assert(sel_n == 0, "tanpa Selected (cursor only), got " .. sel_n)
+    assert(ok_n == 1, "info tetap berwarna, got " .. ok_n)
   end)
 end

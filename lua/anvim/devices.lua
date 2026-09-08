@@ -148,4 +148,101 @@ function M.format(device)
   return string.format("%s %s (%s) [%s]", status_icon, model, device.id, device.status)
 end
 
+--- Toggle preset adb. device=true → tambah -s active (kecuali host-only).
+M.ADB_PRESETS = {
+  { label = "connect (IP:port)…", cmd = "connect", arg = "IP:port, e.g. 192.168.1.5:5555", device = false },
+  { label = "disconnect", cmd = "disconnect", device = false },
+  { label = "devices -l", cmd = "devices -l", device = false },
+  { label = "reconnect", cmd = "reconnect", device = false },
+  { label = "reboot device", cmd = "reboot", device = true },
+  { label = "shell…", cmd = "shell", arg = "shell command (empty = interactive note)", device = true },
+  { label = "custom adb…", custom = true },
+}
+
+local HOST_ONLY = { connect = true, disconnect = true, devices = true, reconnect = true, ["version"] = true }
+
+--- Jalankan argv adb via task window. on_done(ok). Tambah -s bila cocok.
+function M.adb_exec(argv, opts, on_done)
+  opts = opts or {}
+  on_done = on_done or function() end
+  if vim.fn.executable("adb") == 0 then
+    alert.warn("ADB required. Run :AnvimCheck to install.")
+    on_done(false)
+    return
+  end
+  local cmd = { "adb" }
+  local active = M.get_active()
+  if opts.device ~= false and active and active ~= "" and not HOST_ONLY[argv[1]] then
+    vim.list_extend(cmd, { "-s", active })
+  end
+  for _, a in ipairs(argv) do table.insert(cmd, a) end
+  local ok_t, tasks = pcall(require, "anvim.tasks")
+  if not ok_t then
+    alert.error("adb", "tasks module failed to load")
+    on_done(false)
+    return
+  end
+  tasks.run_custom(cmd, "adb " .. table.concat(argv, " "), function(_, ok)
+    on_done(ok)
+  end)
+end
+
+local function input_line(prompt, on_ok)
+  vim.fn.inputsave()
+  local raw = vim.fn.input(prompt)
+  vim.fn.inputrestore()
+  if raw == nil or vim.trim(raw) == "" then return end
+  on_ok(vim.trim(raw))
+end
+
+--- Toggle: pilih command adb → isi argumen → jalan. on_done diteruskan.
+function M.adb_pick(on_done)
+  on_done = on_done or function() end
+  if vim.fn.executable("adb") == 0 then
+    alert.warn("ADB required. Run :AnvimCheck to install.")
+    on_done(false)
+    return
+  end
+  local labels = {}
+  for _, p in ipairs(M.ADB_PRESETS) do table.insert(labels, p.label) end
+  vim.ui.select(labels, { prompt = "adb command:" }, function(choice)
+    if not choice then on_done(false) return end
+    local preset
+    for _, p in ipairs(M.ADB_PRESETS) do if p.label == choice then preset = p break end end
+    if not preset then on_done(false) return end
+    if preset.custom then
+      input_line("adb ", function(raw)
+        if raw:match("^adb%s+") then raw = raw:gsub("^adb%s+", "") end
+        local argv = {}
+        for w in raw:gmatch("%S+") do table.insert(argv, w) end
+        if #argv == 0 then on_done(false) return end
+        M.adb_exec(argv, { device = true }, on_done)
+      end)
+      return
+    end
+    if preset.cmd == "connect" then
+      input_line("Device IP:port: ", function(target)
+        if not target:match("^[%w%.%-]+:%d+$") then
+          alert.warn("Format must be IP:port, e.g. 192.168.1.5:5555")
+          on_done(false)
+          return
+        end
+        M.adb_exec({ "connect", target }, { device = false }, on_done)
+      end)
+      return
+    end
+    if preset.arg and preset.cmd == "shell" then
+      input_line("adb shell: ", function(line)
+        local argv = { "shell" }
+        for w in line:gmatch("%S+") do table.insert(argv, w) end
+        M.adb_exec(argv, { device = true }, on_done)
+      end)
+      return
+    end
+    local argv = {}
+    for w in preset.cmd:gmatch("%S+") do table.insert(argv, w) end
+    M.adb_exec(argv, { device = preset.device }, on_done)
+  end)
+end
+
 return M

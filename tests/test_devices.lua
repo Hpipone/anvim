@@ -113,4 +113,62 @@ return function(ctx)
     d2.list()
     assert(d2.get_active() == "emulator-5554", "harus restore, got " .. tostring(d2.get_active()))
   end)
+
+  run("devices: adb_exec tambah -s active", function()
+    setup()
+    local got
+    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    d.list()
+    d.set_active("emulator-5554")
+    d.adb_exec({ "shell", "getprop" }, {}, function() end)
+    assert(got[1] == "adb" and got[2] == "-s" and got[3] == "emulator-5554" and got[4] == "shell",
+      table.concat(got, " "))
+  end)
+
+  run("devices: adb_exec tanpa -s untuk connect", function()
+    setup()
+    local got
+    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    d.list()
+    d.set_active("emulator-5554")
+    d.adb_exec({ "connect", "192.168.1.5:5555" }, {}, function() end)
+    assert(#got == 3 and got[2] == "connect", table.concat(got, " "))
+  end)
+
+  run("devices: adb_pick connect validasi IP:port", function()
+    setup()
+    local got, warned = nil, false
+    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    package.loaded["anvim.status-alert"] = { info = function() end,
+      warn = function() warned = true end, error = function() end, ok = function() end, debug = function() end }
+    mock.raw("ui.select", function(_, _, cb) cb("connect (IP:port)…") end)
+    mock.raw("fn.inputsave", function() end)
+    mock.raw("fn.inputrestore", function() end)
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    mock.raw("fn.input", function() return "ngawur" end)
+    d.adb_pick(function() end)
+    assert(warned == true and got == nil, "IP jelek harus ditolak")
+    mock.raw("fn.input", function() return "192.168.1.5:5555" end)
+    d.adb_pick(function() end)
+    assert(got ~= nil and got[3] == "192.168.1.5:5555", "connect harus jalan")
+  end)
+
+  run("devices: adb_pick custom strip kata adb", function()
+    setup()
+    local got
+    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    mock.raw("ui.select", function(_, _, cb) cb("custom adb…") end)
+    mock.raw("fn.inputsave", function() end)
+    mock.raw("fn.inputrestore", function() end)
+    mock.raw("fn.input", function() return "adb shell wm size" end)
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    d.adb_pick(function() end)
+    assert(got[1] == "adb" and got[2] == "shell", table.concat(got, " "))
+  end)
 end

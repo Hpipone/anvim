@@ -71,7 +71,8 @@ function M.setup(opts)
     end)
   end, "Run custom task via anvim")
   register_cmd("AnvimRerun", function() require("anvim.tasks").rerun() end, "Rerun last anvim task")
-  register_cmd("AnvimScrcpy", function() require("anvim.scrcpy").pick() end, "Scrcpy mirror picker")
+  register_cmd("AnvimAdb", function() require("anvim.devices").adb_pick() end, "adb console (connect, shell, ...)")
+  register_cmd("AnvimScrcpy", function() require("anvim.scrcpy").pick() end, "Scrcpy picker")
   register_cmd("AnvimScrcpyKill", function()
     local ok, scr = pcall(require, "anvim.scrcpy")
     if not ok then return end
@@ -84,7 +85,7 @@ function M.setup(opts)
     vim.ui.select(ids, { prompt = "Stop scrcpy:" }, function(choice)
       if choice then scr.stop(choice) end
     end)
-  end, "Stop scrcpy mirror")
+  end, "Stop scrcpy")
   register_cmd("AnvimDoctor", function() require("anvim.system_check").doctor() end, "anvim environment doctor")
   register_cmd("AnvimLogcatSave", function(opts)
     local path = (opts and opts.args ~= "" and opts.args) or nil

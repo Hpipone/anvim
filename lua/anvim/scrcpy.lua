@@ -77,7 +77,7 @@ local function valid_device(device_id)
   for _, d in ipairs(dev.list()) do
     if d.id == device_id then
       if d.status ~= "device" then
-        alert.warn("Device " .. device_id .. " status " .. d.status .. " — mirror may fail.")
+        alert.warn("Device " .. device_id .. " status " .. d.status .. " — scrcpy may fail.")
       end
       return true
     end
@@ -109,7 +109,7 @@ function M.launch(device_id, opts, on_done)
     return
   end
   local cmd = M.build_cmd(device_id, opts)
-  alert.info("Scrcpy mirror: " .. device_id .. (opts.record and " (+record)" or ""))
+  alert.info("Scrcpy: " .. device_id .. (opts.record and " (+record)" or ""))
   local job = vim.fn.jobstart(cmd, {
     on_exit = function(_, code)
       M.jobs[device_id] = nil
@@ -144,7 +144,7 @@ function M.stop(device_id, on_done)
   on_done(true)
 end
 
---- Ambil device id dari label picker ("○ mirror  ID (model)").
+--- Ambil device id dari label picker ("○ scrcpy  ID (model)").
 function M._id_from_label(label)
   if not label then return nil end
   return label:match("%s%s(%S+)")
@@ -159,12 +159,12 @@ function M.pick()
     if d.status == "device" then table.insert(list, d) end
   end
   if #list == 0 then
-    alert.warn("No online devices to mirror.")
+    alert.warn("No online devices for scrcpy.")
     return
   end
   local labels = {}
   for _, d in ipairs(list) do
-    local st = M.jobs[d.id] and "● mirroring" or "○ mirror"
+    local st = M.jobs[d.id] and "● scrcpy on" or "○ scrcpy"
     table.insert(labels, st .. "  " .. d.id .. " (" .. (d.model or "?") .. ")")
   end
   vim.ui.select(labels, { prompt = "Scrcpy device:" }, function(choice)
@@ -175,7 +175,7 @@ function M.pick()
       M.stop(id)
       return
     end
-    vim.ui.select({ "Mirror", "Mirror + Record" }, { prompt = "Scrcpy " .. id .. ":" }, function(action)
+    vim.ui.select({ "Scrcpy", "Scrcpy + Record" }, { prompt = "Scrcpy " .. id .. ":" }, function(action)
       if not action then return end
       M.launch(id, { record = action:find("Record") ~= nil })
     end)

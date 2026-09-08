@@ -127,14 +127,14 @@ local function build_items(proj, h_results, dev_list, avd_info, fdevs, scrcpy_in
     table.insert(items, { type = "header", text = "Scrcpy" })
     for _, s in ipairs(scrcpy_info) do
       if s.running then
-        table.insert(items, { type = "scrcpy", label = string.format("● %s (%s) — mirroring", s.model or "device", s.id), scrcpy = s })
+        table.insert(items, { type = "scrcpy", label = string.format("● %s (%s) — scrcpy on", s.model or "device", s.id), scrcpy = s })
       else
-        table.insert(items, { type = "scrcpy", label = string.format("○ %s (%s) — mirror", s.model or "device", s.id), scrcpy = s })
+        table.insert(items, { type = "scrcpy", label = string.format("○ %s (%s) — scrcpy", s.model or "device", s.id), scrcpy = s })
       end
     end
-    table.insert(items, { type = "task", label = "Scrcpy… (mirror/record/stop)", task = "scrcpy", icon = "◉" })
+    table.insert(items, { type = "task", label = "Scrcpy… (scrcpy/record/stop)", task = "scrcpy", icon = "◉" })
   elseif scrcpy_hint then
-    table.insert(items, { type = "hint", text = "(scrcpy: mirror HP — c → check untuk install)" })
+    table.insert(items, { type = "hint", text = "(scrcpy — c → check untuk install)" })
   end
   if show_emulators ~= false then
     table.insert(items, { type = "header", text = "Emulators" })
@@ -217,7 +217,7 @@ local function render(buf, items, selected, proj, dev_active, height, width)
       if g then table.insert(hlmarks, { line = #content, group = g }) end
     end
 
-    add(center("a n v i m", width), "AnvimTitle")
+    add(center("a n v i m", width))
     add(center("Android / Flutter Toolkit  " .. VERSION(), width))
     add("")
     local info = string.format("Project: %s (%s)  |  Device: %s", proj.name or "?", proj.type or "?", dev_active or "none")
@@ -232,46 +232,46 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     add(center(string.rep("─", math.min(60, width - 4)), width))
     add("")
 
+    -- highlight minimal: hanya baris info (status tool); seleksi = cursor saja
     for idx, item in ipairs(items) do
       local is_sel = idx == selected
       local prefix = is_sel and "→ " or "  "
       if item.type == "header" then
         add("")
-        add(center("── " .. item.text .. " ──", width), "AnvimHeader")
+        add(center("── " .. item.text .. " ──", width))
       elseif item.type == "hint" then
-        add(center(item.text, width), "AnvimHint")
+        add(center(item.text, width))
       elseif item.type == "task" then
         local txt = prefix .. (item.icon or " ") .. "  " .. item.label
-        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        add(center(txt, width))
         if is_sel then cur_sel_line = #content end
       elseif item.type == "custom" then
         local txt = prefix .. (item.icon or "★") .. "  " .. item.label
-        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        add(center(txt, width))
         if is_sel then cur_sel_line = #content end
       elseif item.type == "device" then
         local txt = prefix .. item.label
-        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        add(center(txt, width))
         if is_sel then cur_sel_line = #content end
       elseif item.type == "avd" then
         local txt = prefix .. "▣  " .. item.label
-        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        add(center(txt, width))
         if is_sel then cur_sel_line = #content end
       elseif item.type == "scrcpy" then
         local txt = prefix .. "◉  " .. item.label
-        add(center(txt, width), is_sel and "AnvimSelected" or nil)
+        add(center(txt, width))
         if is_sel then cur_sel_line = #content end
       elseif item.type == "health" then
         local line = (is_sel and prefix or "  ") .. syscheck_m.format_line(item.tool, item.result)
-        local g = is_sel and "AnvimSelected"
-          or (item.result.status == "ok" and "AnvimOk"
-            or item.result.status == "old" and "AnvimWarn" or "AnvimError")
+        local g = item.result.status == "ok" and "AnvimOk"
+          or item.result.status == "old" and "AnvimWarn" or "AnvimError"
         add(center(line, width), g)
       end
     end
 
     add("")
     add(center(string.rep("─", math.min(60, width - 4)), width))
-    add(center("j/k Move  Enter Select  R Rerun  x Cancel  e Emu  m Mirror  t Test  q Quit  c Check  r Run  l Log", width))
+    add(center("j/k Move  Enter Select  R Rerun  x Cancel  e Emu  m Scrcpy  t Test  : adb  q Quit  c Check  r Run  l Log", width))
 
     local vert_pad = math.floor(math.max(0, height - #content) / 2)
     local lines = {}
@@ -422,6 +422,7 @@ function M.open()
     vim.bo[buf].bufhidden = "wipe"
     vim.bo[buf].filetype = "anvim-dashboard"
     vim.wo[win].winblend = d.winblend
+    vim.wo[win].cursorline = true -- seleksi = cursor saja
 
     M.state.open = true
     M.state.buf = buf
@@ -610,6 +611,19 @@ end
 function M.do_scrcpy()
   local ok, scr = pcall(require, "anvim.scrcpy")
   if ok then scr.pick() end
+end
+
+function M.do_adb()
+  local ok, dev = pcall(require, "anvim.devices")
+  if not ok then return end
+  dev.adb_pick(function()
+    -- sesudah connect/disconnect: refresh agar daftar device update
+    if M.state.open then
+      refresh_keep_selection()
+      local width, height = current_geom()
+      render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
+    end
+  end)
 end
 
 function M.do_emulator_kill()

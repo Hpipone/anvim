@@ -91,3 +91,9 @@
 - [x] Dashboard tidak panggil check_all (pakai last_results cache + hint press c)
 - [x] Hapus auto-warn + health_check.auto dari defaults (scan hanya user-trigger)
 - [x] Tests 142 pass (17 suites)
+
+## Fase 11 — minimal highlight + adb console (DONE, v1.4.1)
+- [x] Highlight hanya baris info + cursor (cursorline, tanpa Selected)
+- [x] Rename mirror → scrcpy (user-facing)
+- [x] Konsol adb `:AnvimAdb` + key `:`: toggle preset (connect IP:port validasi, shell, custom), -s otomatis
+- [x] Tests 147 pass (17 suites)

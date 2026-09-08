@@ -70,7 +70,7 @@ return function(ctx)
     package.loaded["anvim.scrcpy"] = nil
     package.loaded["anvim.util"] = nil
     local s = require("anvim.scrcpy")
-    assert(s._id_from_label("○ mirror  RF123 (Pixel)") == "RF123")
+    assert(s._id_from_label("○ scrcpy  RF123 (Pixel)") == "RF123")
     assert(s._id_from_label(nil) == nil)
   end)
 

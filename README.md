@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.4.0** — Stable (Fase 8 tech-debt cleanup)
+> **v1.4.1** — Stable (Fase 11: minimal highlight, adb console)
 
 ## Features
 
@@ -16,7 +16,7 @@
 - **Logcat** — live view, level/tag filters, save to file, clipboard copy
 - **Devices** — multi-device select (`-s` everywhere, `ANDROID_SERIAL` for Gradle), offline/unauthorized warnings, persistent active device
 - **Emulator** — list AVDs, launch (cold/quick/wipe), kill, boot wait + auto-select
-- **Scrcpy** — mirror + control phone per device, record to `~/Videos`, custom flags; replaces emulator section when installed (install via `:AnvimCheck`)
+- **Scrcpy** — show + control phone per device, record to `~/Videos`, custom flags; replaces emulator section when installed (install via `:AnvimCheck`)
 
 ## Requirements
 
@@ -74,7 +74,8 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | `r` / `t` / `R` | Run app / tests / rerun last |
 | `l` | Logcat |
 | `e` | Emulator |
-| `m` | Scrcpy mirror |
+| `m` | Scrcpy |
+| `:` | adb console (connect IP:port, shell, ...) |
 | `x` | Cancel task |
 | `q` | Quit |
 
@@ -86,17 +87,18 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | `:AnvimRun` / `:AnvimTest` / `:AnvimRerun` / `:AnvimCustom` | Tasks |
 | `:AnvimLogcat` (`<leader>al`) / `:AnvimLogcatSave [path]` | Logs |
 | `:AnvimEmulator` / `:AnvimEmulatorKill` | Emulator |
-| `:AnvimScrcpy` / `:AnvimScrcpyKill` | Mirror phone screen |
+| `:AnvimScrcpy` / `:AnvimScrcpyKill` | Show phone screen |
+| `:AnvimAdb` | adb console with command toggle |
 | `:AnvimHelp` | Help |
 
 Logcat keys: `V/D/I/W/E/F` level, `T` tag, `S` save, `yy` copy line, `/` search.
 
-Custom tasks appear in the dashboard (★). Theming via `AnvimTitle/Header/Selected/Ok/Warn/Error/Hint` highlight groups. Statusline: `require("anvim.statusline").lualine()`.
+Custom tasks appear in the dashboard (★). Minimal highlights (status colors on Info rows, cursor marks selection). Groups: `AnvimTitle/Header/Selected/Ok/Warn/Error/Hint`. Statusline: `require("anvim.statusline").lualine()`.
 
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 140 unit tests, no framework
+nvim --headless -l tests/run.lua   # 147 unit tests, no framework
 ```
 
 ## Roadmap
