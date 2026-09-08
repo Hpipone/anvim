@@ -180,7 +180,11 @@ return function(ctx)
       captured.opts = opts
       return 21
     end)
-    mock.raw("fn.chansend", function(id, data) captured.sent = { id = id, data = data } return 1 end)
+    mock.raw("fn.chansend", function(id, data)
+      assert(id == 21, "channel id harus job id (bukan nil!), got " .. tostring(id))
+      captured.sent = { id = id, data = data }
+      return 1
+    end)
     mock.raw("fn.jobstop", function() end)
     mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
     mock.raw("fn.inputsave", function() end)
@@ -219,7 +223,11 @@ return function(ctx)
       captured.opts = opts
       return 21
     end)
-    mock.raw("fn.chansend", function(_, data) captured.sent = data return 1 end)
+    mock.raw("fn.chansend", function(id, data)
+      assert(id == 21, "channel id harus job id (bukan nil!), got " .. tostring(id))
+      captured.sent = data
+      return 1
+    end)
     mock.raw("fn.jobstop", function() end)
     mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
     mock.raw("fn.inputsave", function() end)
@@ -245,7 +253,11 @@ return function(ctx)
       captured.opts = opts
       return 21
     end)
-    mock.raw("fn.chansend", function(_, data) captured.sent = data return 1 end)
+    mock.raw("fn.chansend", function(id, data)
+      assert(id == 21, "channel id harus job id (bukan nil!), got " .. tostring(id))
+      captured.sent = data
+      return 1
+    end)
     mock.raw("fn.jobstop", function() end)
     mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
     mock.raw("fn.inputsave", function() end)

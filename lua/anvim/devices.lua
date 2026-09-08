@@ -146,6 +146,37 @@ function M.get_active()
   return M.state.active
 end
 
+--- Tunggu device id status "device" (offline/connecting sesaat itu normal).
+--- Poll tiap 1 detik sampai timeout_ms. on_done(true/false).
+function M.wait_device(device_id, timeout_ms, on_done)
+  on_done = on_done or function() end
+  timeout_ms = timeout_ms or 10000
+  local start = vim.uv.now()
+  local timer = vim.uv.new_timer()
+  local done = false
+  local function finish(ok)
+    if done then return end
+    done = true
+    pcall(function() timer:stop() end)
+    pcall(function() timer:close() end)
+    on_done(ok)
+  end
+  timer:start(0, 1000, vim.schedule_wrap(function()
+    local ok, list = pcall(M.list)
+    if ok and list then
+      for _, d in ipairs(list) do
+        if d.id == device_id and d.status == "device" then
+          finish(true)
+          return
+        end
+      end
+    end
+    if vim.uv.now() - start > timeout_ms then
+      finish(false)
+    end
+  end))
+end
+
 --- Args -s <device> untuk semua adb call (nil jika single/tidak ada).
 function M.device_args()
   if M.state.active then
@@ -238,7 +269,10 @@ function M.adb_pair(target, on_done)
     end
     return nil
   end
-  local function maybe_prompt(job)
+  -- NOTE skoping Lua: closure di bawah dibuat SEBELUM job ada, jadi JANGAN
+  -- referensi `local job` langsung (akan mengikat global nil). Pakai holder.
+  local st = {}
+  local function maybe_prompt()
     if finished or prompted then return end
     local blob = table.concat(outbuf, "\n"):lower()
     -- prompt adb bisa terpotong antar chunk ("Enter pair" + "ing code: ")
@@ -253,13 +287,13 @@ function M.adb_pair(target, on_done)
       local code = vim.fn.input("Pairing code: ")
       vim.fn.inputrestore()
       if code == nil or vim.trim(code) == "" then
-        pcall(vim.fn.jobstop, job)
+        pcall(vim.fn.jobstop, st.job)
         finish(false)
         return
       end
       -- adb bisa sudah exit duluan (prompt + mati hampir bersamaan
       -- saat koneksi gagal) → laporkan hasil asli, bukan "channel closed"
-      local sent_ok = pcall(vim.fn.chansend, job, vim.trim(code) .. "\n")
+      local sent_ok = st.job ~= nil and pcall(vim.fn.chansend, st.job, vim.trim(code) .. "\n")
       if sent_ok then return end
       if exit_code ~= nil then
         finish(exit_code == 0)
@@ -270,18 +304,18 @@ function M.adb_pair(target, on_done)
       finish(false)
     end)
   end
-  local job = vim.fn.jobstart({ adb_bin, "pair", target }, {
+  st.job = vim.fn.jobstart({ adb_bin, "pair", target }, {
     stdout_buffered = false,
     stderr_buffered = false,
     on_stdout = function(_, data)
       if finished then return end
       for _, l in ipairs(data or {}) do table.insert(outbuf, l) end
-      maybe_prompt(job)
+      maybe_prompt()
     end,
     on_stderr = function(_, data)
       if finished then return end
       for _, l in ipairs(data or {}) do table.insert(outbuf, l) end
-      maybe_prompt(job)
+      maybe_prompt()
     end,
     on_exit = function(_, code)
       exit_code = code
@@ -295,7 +329,7 @@ function M.adb_pair(target, on_done)
       finish(code == 0)
     end,
   })
-  if job == nil or job <= 0 then
+  if st.job == nil or st.job <= 0 then
     alert.error("adb", "pair jobstart failed")
     finish(false)
     return
@@ -304,7 +338,7 @@ function M.adb_pair(target, on_done)
   vim.defer_fn(function()
     if not finished and not prompted then
       alert.warn("No pairing prompt from adb — is the IP:port correct?")
-      pcall(vim.fn.jobstop, job)
+      pcall(vim.fn.jobstop, st.job)
       finish(false)
     end
   end, 120000)
@@ -343,26 +377,25 @@ function M.adb_pick(on_done)
           return
         end
         -- adb connect exit 0 walau gagal ("failed to connect...")!
-        -- Verifikasi via isi output + device benar muncul di list.
+        -- Verifikasi via isi output + tunggu device ready (offline dulu itu normal).
         M.adb_exec({ "connect", target }, { device = false }, function(output, ok)
           local blob = string.lower(tostring(output or ""))
           local said_ok = blob:find("connected to", 1, true) or blob:find("already connected", 1, true)
-          local present = false
-          if said_ok then
-            pcall(function()
-              for _, d in ipairs(M.list()) do
-                if d.id == target and d.status == "device" then present = true end
-              end
-            end)
-          end
-          if ok and said_ok and present then
-            on_done(true)
-          else
+          if not (ok and said_ok) then
             local reason = blob:match("[^\r\n]*failed[^\r\n]*") or blob:match("[^\r\n]*refused[^\r\n]*")
-              or "device not in list — same wifi? wireless debugging on?"
+              or "connection rejected — same wifi? wireless debugging on?"
             alert.error("connect", target .. ": " .. vim.trim(reason))
             on_done(false)
+            return
           end
+          M.wait_device(target, 10000, function(ready)
+            if ready then
+              on_done(true)
+            else
+              alert.warn("Connected to " .. target .. " but device not ready — check `adb devices`")
+              on_done(false)
+            end
+          end)
         end)
       end)
       return

@@ -17,7 +17,7 @@ CONTENTS                                     *anvim*
 anvim is a TUI dashboard for Android and Flutter development inside Neovim.
 It provides an interactive keyboard-driven interface for running tasks,
 viewing logcat, and managing devices — eliminating the need for Android Studio.
-Version 1.6.4.
+Version 1.6.5.
 
 Features:
   - Project auto-detection (Flutter vs Android/Gradle vs Node/npm, git-root aware)

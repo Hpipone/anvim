@@ -150,7 +150,7 @@ local function ensure_output_win()
     local cols = vim.o.columns or 80
     local lines = vim.o.lines or 24
     local h = math.floor(lines * 0.3)
-    win = vim.api.nvim_open_win(buf, false, {
+    win = vim.api.nvim_open_win(buf, true, {
       relative = "editor", width = cols - 2, height = math.max(8, h),
       col = 1, row = lines - h - 1, style = "minimal", border = "rounded",
       title = " anvim task (q to close) ", title_pos = "center",

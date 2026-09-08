@@ -231,12 +231,13 @@ return function(ctx)
 
   run("tasks: output di depan (zindex) + bisa ditutup", function()
     setup()
-    local win_cfg
-    mock.raw("api.nvim_open_win", function(_, _, cfg) win_cfg = cfg return 52 end)
+    local win_cfg, win_enter
+    mock.raw("api.nvim_open_win", function(_, enter, cfg) win_cfg = cfg win_enter = enter return 52 end)
     package.loaded["anvim.tasks"] = nil
     local t = require("anvim.tasks")
     t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean")
     assert(win_cfg and (win_cfg.zindex or 0) > 0, "output harus di depan")
+    assert(win_enter == true, "cursor harus ke task window")
     t.state.win = 52
     t.close_output()
     assert(t.state.win == nil)

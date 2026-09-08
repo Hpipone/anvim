@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.6.4** — Stable (honest connect, no record)
+> **v1.6.5** — Stable (honest connect, no record)
 
 ## Features
 
