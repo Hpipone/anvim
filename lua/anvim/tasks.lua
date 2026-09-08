@@ -149,6 +149,7 @@ local function ensure_output_win()
       relative = "editor", width = cols - 2, height = math.max(8, h),
       col = 1, row = lines - h - 1, style = "minimal", border = "rounded",
       title = " anvim task (q to close) ", title_pos = "center",
+      zindex = 60, -- selalu di depan dashboard
     })
     M.state.win = win
   end
@@ -157,11 +158,18 @@ end
 
 --- Tutup window output (buffer dipertahankan; run berikutnya pakai lagi).
 --- Tidak stop job yang jalan — pakai x di dashboard / tasks.stop().
+--- Seperti check/logcat: keluar → kembali ke dashboard.
 function M.close_output()
   if M.state.win and vim.api.nvim_win_is_valid(M.state.win) then
     pcall(vim.api.nvim_win_close, M.state.win, true)
   end
   M.state.win = nil
+  vim.schedule(function()
+    local ok, dash = pcall(require, "anvim.dashboard")
+    if ok and not dash.state.open then
+      pcall(dash.open)
+    end
+  end)
 end
 
 local function append_output(buf, data)
@@ -256,12 +264,11 @@ local function run_cmd(cmd, label, cwd, on_done, env)
       M.state.job_id = nil
       local output = table.concat(out_lines, "\n")
       local success = code == 0
+      -- quickfix tetap terisi; sinyal selesai = notify (tanpa log done)
       pcall(vim.fn.setqflist, {}, " ", { title = "anvim:" .. label, lines = out_lines })
       if success then
-        append_output(M.state.buf, { "[✓ done: " .. label .. "]" })
         alert.ok("Task completed: " .. label)
       else
-        append_output(M.state.buf, { "[✗ failed (" .. tostring(code) .. "): " .. label .. " — :copen untuk detail]" })
         alert.error("task", "Task failed (code " .. tostring(code) .. "): " .. label)
       end
       if on_done then on_done(output, success, label) end

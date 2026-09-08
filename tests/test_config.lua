@@ -2,12 +2,12 @@
 
 return function(ctx)
   local run = ctx.run
-  run("config: defaults lengkap v1.5.0", function()
+  run("config: defaults lengkap v1.6.0", function()
     package.loaded["anvim.config"] = nil
     local c = require("anvim.config")
     c.setup({})
     local g = c.get()
-    assert(g.version == "1.5.0", "got " .. tostring(g.version))
+    assert(g.version == "1.6.0", "got " .. tostring(g.version))
     assert(g.dashboard.width == 0.8)
     assert(g.dashboard.border == "rounded")
     assert(g.logcat.max_lines == 5000)

@@ -606,15 +606,11 @@ local function ui_render()
     "OS: " .. OS:upper() .. "  Arch: " .. ARCH,
     string.rep("─", width - 2),
   }
-  local hl = {}
   for i, it in ipairs(M._ui.items) do
     local sel = (i == M._ui.selected) and "→ " or "  "
     local line = sel .. M.format_line(it.name, it.result)
     if #line > width then line = line:sub(1, width - 3) .. "..." end
     table.insert(lines, line)
-    local grp = it.result.status == "ok" and "AnvimOk"
-      or it.result.status == "old" and "AnvimWarn" or "AnvimError"
-    table.insert(hl, { line = #lines, group = (i == M._ui.selected) and "AnvimSelected" or grp })
   end
   table.insert(lines, string.rep("─", width - 2))
   for _, is in ipairs(M._ui.env or {}) do
@@ -625,10 +621,8 @@ local function ui_render()
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].modifiable = false
   pcall(require, "anvim.theme")
+  -- TANPA highlight baris (cursor only), sama seperti dashboard.
   pcall(vim.api.nvim_buf_clear_namespace, buf, NS, 0, -1)
-  for _, h in ipairs(hl) do
-    pcall(vim.api.nvim_buf_add_highlight, buf, NS, h.group, h.line - 1, 0, -1)
-  end
 end
 
 local function ui_install_queue(names, on_all_done)

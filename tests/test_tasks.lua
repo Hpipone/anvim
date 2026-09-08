@@ -21,6 +21,7 @@ return function(ctx)
     mock.raw("api.nvim_buf_line_count", function() return 3 end)
     mock.raw("api.nvim_buf_set_name", function() end)
     mock.raw("uv.new_timer", function() return { start = function() end, stop = function() end, close = function() end } end)
+    mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
     mock.raw("o.columns", 200)
     mock.raw("o.lines", 50)
     mock.raw("log.levels", { INFO = 0, WARN = 1, ERROR = 2, DEBUG = 3 })
@@ -226,5 +227,43 @@ return function(ctx)
     local bare = { type = "node", build_tool = "npm", root = "/tmp/app", scripts = {} }
     assert(t._cmd_for(bare, "run") == nil, "tanpa script dev/start harus nil")
     assert(t._cmd_for(bare, "build") == nil)
+  end)
+
+  run("tasks: output di depan (zindex) + bisa ditutup", function()
+    setup()
+    local win_cfg
+    mock.raw("api.nvim_open_win", function(_, _, cfg) win_cfg = cfg return 52 end)
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean")
+    assert(win_cfg and (win_cfg.zindex or 0) > 0, "output harus di depan")
+    t.state.win = 52
+    t.close_output()
+    assert(t.state.win == nil)
+  end)
+
+  run("tasks: close_output kembali ke dashboard", function()
+    setup()
+    local opened = false
+    package.loaded["anvim.dashboard"] = { state = { open = false }, open = function() opened = true end }
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.state.win = nil
+    t.close_output()
+    assert(opened == true, "tutup output harus buka dashboard")
+  end)
+
+  run("tasks: tanpa log done di buffer", function()
+    setup()
+    local appended = {}
+    mock.raw("api.nvim_buf_set_lines", function(_, _, _, _, lines)
+      for _, l in ipairs(lines or {}) do table.insert(appended, l) end
+    end)
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean")
+    for _, l in ipairs(appended) do
+      assert(not l:find("done:", 1, true), "log done harus hilang: " .. l)
+    end
   end)
 end

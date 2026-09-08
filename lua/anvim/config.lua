@@ -4,7 +4,7 @@
 local M = {}
 
 M.defaults = {
-  version = "1.5.0",
+  version = "1.6.0",
   dashboard = {
     width = 0.8,
     height = 0.8,

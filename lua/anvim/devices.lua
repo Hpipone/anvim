@@ -150,6 +150,7 @@ end
 
 --- Toggle preset adb. device=true → tambah -s active (kecuali host-only).
 M.ADB_PRESETS = {
+  { label = "pair (IP:port)…", cmd = "pair", arg = "IP:port, e.g. 192.168.1.5:37099", device = false },
   { label = "connect (IP:port)…", cmd = "connect", arg = "IP:port, e.g. 192.168.1.5:5555", device = false },
   { label = "disconnect", cmd = "disconnect", device = false },
   { label = "devices -l", cmd = "devices -l", device = false },
@@ -159,7 +160,7 @@ M.ADB_PRESETS = {
   { label = "custom adb…", custom = true },
 }
 
-local HOST_ONLY = { connect = true, disconnect = true, devices = true, reconnect = true, ["version"] = true }
+local HOST_ONLY = { pair = true, connect = true, disconnect = true, devices = true, reconnect = true, ["version"] = true }
 
 --- Jalankan argv adb via task window. on_done(ok). Tambah -s bila cocok.
 function M.adb_exec(argv, opts, on_done)
@@ -195,6 +196,58 @@ local function input_line(prompt, on_ok)
   on_ok(vim.trim(raw))
 end
 
+--- Pairing wireless: adb pair butuh kode dari layar HP.
+--- Alur: start pair → tunggu prompt kode → input user → chansend → done.
+function M.adb_pair(target, on_done)
+  on_done = on_done or function() end
+  if vim.fn.executable("adb") == 0 then
+    alert.warn("ADB required. Run :AnvimCheck to install.")
+    on_done(false)
+    return
+  end
+  alert.info("Pairing with " .. target .. " — check the code on your phone screen")
+  local finished = false
+  local function finish(ok)
+    if finished then return end
+    finished = true
+    on_done(ok)
+  end
+  local job = vim.fn.jobstart({ "adb", "pair", target }, {
+    stdout_buffered = false,
+    on_stdout = function(_, data)
+      if finished then return end
+      local blob = table.concat(data or {}, "\n"):lower()
+      if blob:find("pairing code") or blob:find("enter.*code") then
+        vim.schedule(function()
+          if finished then return end
+          vim.fn.inputsave()
+          local code = vim.fn.input("Pairing code: ")
+          vim.fn.inputrestore()
+          if code == nil or vim.trim(code) == "" then
+            pcall(vim.fn.jobstop, job)
+            finish(false)
+            return
+          end
+          pcall(vim.fn.chansend, job, vim.trim(code) .. "\n")
+        end)
+      end
+    end,
+    on_stderr = function() end,
+    on_exit = function(_, code)
+      if code == 0 then
+        alert.ok("Paired with " .. target .. " — now connect IP:port")
+      else
+        alert.warn("Pair failed for " .. target)
+      end
+      finish(code == 0)
+    end,
+  })
+  if job == nil or job <= 0 then
+    alert.error("adb", "pair jobstart failed")
+    finish(false)
+  end
+end
+
 --- Toggle: pilih command adb → isi argumen → jalan. on_done diteruskan.
 function M.adb_pick(on_done)
   on_done = on_done or function() end
@@ -228,6 +281,17 @@ function M.adb_pick(on_done)
           return
         end
         M.adb_exec({ "connect", target }, { device = false }, on_done)
+      end)
+      return
+    end
+    if preset.cmd == "pair" then
+      input_line("Pair IP:port: ", function(target)
+        if not target:match("^[%w%.%-]+:%d+$") then
+          alert.warn("Format must be IP:port, e.g. 192.168.1.5:37099")
+          on_done(false)
+          return
+        end
+        M.adb_pair(target, on_done)
       end)
       return
     end

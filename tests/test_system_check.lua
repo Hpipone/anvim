@@ -197,6 +197,22 @@ return function(ctx)
     sc._ui_close()
   end)
 
+  run("system_check: tanpa highlight baris (cursor only)", function()
+    setup()
+    local n_hl = 0
+    mock.raw("api.nvim_buf_add_highlight", function() n_hl = n_hl + 1 end)
+    mock.raw("fn.executable", function() return 0 end)
+    mock.raw("fn.exepath", function() return "" end)
+    mock.raw("fn.glob", function() return {} end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    sc.interactive()
+    sc._ui_nav(1)
+    assert(n_hl == 0, "nol highlight, got " .. n_hl)
+    sc._ui_close()
+  end)
+
   run("system_check: required_tools scoped per tipe", function()
     setup()
     package.loaded["anvim.system_check"] = nil

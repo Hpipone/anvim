@@ -171,4 +171,44 @@ return function(ctx)
     d.adb_pick(function() end)
     assert(got[1] == "adb" and got[2] == "shell", table.concat(got, " "))
   end)
+
+  run("devices: adb pair kirim kode via chansend", function()
+    setup()
+    local captured = {}
+    mock.raw("fn.jobstart", function(cmd, opts)
+      captured.cmd = cmd
+      captured.opts = opts
+      return 21
+    end)
+    mock.raw("fn.chansend", function(id, data) captured.sent = { id = id, data = data } return 1 end)
+    mock.raw("fn.jobstop", function() end)
+    mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
+    mock.raw("fn.inputsave", function() end)
+    mock.raw("fn.inputrestore", function() end)
+    mock.raw("fn.input", function() return "123456" end)
+    local okmsg = nil
+    package.loaded["anvim.status-alert"] = { info = function() end,
+      warn = function() end, error = function() end, ok = function(m) okmsg = m end, debug = function() end }
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    local done = nil
+    d.adb_pair("192.168.1.5:37099", function(ok) done = ok end)
+    assert(captured.cmd[2] == "pair", "harus adb pair")
+    captured.opts.on_stdout(nil, { "Enter pairing code: " })
+    assert(captured.sent and captured.sent.data == "123456\n", "kode harus dikirim")
+    captured.opts.on_exit(nil, 0)
+    assert(done == true, "pair sukses")
+    assert(okmsg and okmsg:find("Paired"), "notif paired, got " .. tostring(okmsg))
+  end)
+
+  run("devices: preset pair ada di toggle", function()
+    setup()
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    local found = false
+    for _, p in ipairs(d.ADB_PRESETS) do
+      if p.cmd == "pair" then found = true end
+    end
+    assert(found == true, "preset pair wajib ada")
+  end)
 end

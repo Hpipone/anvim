@@ -104,3 +104,9 @@
 - [x] Konsol adb `:` / `:AnvimAdb`: toggle preset, connect IP:port validasi, -s otomatis, auto-select device baru
 - [x] Task window: q/Esc + `:AnvimTaskClose` (buffer dipertahankan)
 - [x] Tests 149 pass (17 suites)
+
+## Fase 13 — zero highlight, pair, front output (DONE, v1.6.0)
+- [x] Hapus highlight system_check juga (cursor only di semua UI)
+- [x] Task output zindex depan + q/Esc tutup → kembali dashboard
+- [x] adb pair + input kode (chansend), preset toggle, hapus log done
+- [x] Tests 155 pass (17 suites)
