@@ -20,6 +20,40 @@ local function device_prefix()
   return {}
 end
 
+--- adb absolut untuk launch (PATH nvim bisa beda dari terminal).
+local function adb_bin()
+  local ok, sys = pcall(require, "anvim.system_check")
+  if ok and sys.adb_bin then
+    local p = sys.adb_bin()
+    if p and p ~= "" then return p end
+  end
+  return "adb"
+end
+
+--- Launch app android yang baru di-install via monkey.
+--- Gagal launch TIDAK menggagalkan install (status terpisah).
+local function launch_android(package, device_id)
+  if not package or package == "" then
+    alert.info("Installed — package id unknown, launch manually.")
+    return
+  end
+  local cmd = { adb_bin() }
+  if device_id and device_id ~= "" then
+    vim.list_extend(cmd, { "-s", device_id })
+  end
+  vim.list_extend(cmd, { "shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1" })
+  alert.info("Launching " .. package .. " ...")
+  vim.fn.jobstart(cmd, {
+    on_exit = function(_, code)
+      if code == 0 then
+        alert.ok("App launched on " .. (device_id or "device"))
+      else
+        alert.warn("Install OK, launch failed (code " .. tostring(code) .. ") — open manually.")
+      end
+    end,
+  })
+end
+
 --- Snapshot ringan project untuk rerun (stabil walau user pindah dir).
 local function snapshot_project(project)
   if type(project) ~= "table" then return nil end
@@ -339,6 +373,18 @@ function M.run(project, task_name, on_done)
       task = task_name,
       project = snapshot_project(project),
     }
+    -- run android sukses → auto-launch di device (install saja tak cukup)
+    if task_name == "run" and project.type == "android" then
+      local wrapped = on_done
+      local dev_id = env and env.ANDROID_SERIAL or nil
+      local pkg = project.package
+      on_done = function(output, ok_run, label)
+        if ok_run then
+          launch_android(pkg, dev_id)
+        end
+        if wrapped then wrapped(output, ok_run, label) end
+      end
+    end
     run_cmd(cmd, task_name, cwd, on_done, env)
   end)
   if not ok then

@@ -114,10 +114,10 @@ return function(ctx)
     assert(d2.get_active() == "emulator-5554", "harus restore, got " .. tostring(d2.get_active()))
   end)
 
-  run("devices: adb_exec tambah -s active", function()
+  run("devices: adb_exec tambah -s active (ke logcat)", function()
     setup()
     local got
-    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    package.loaded["anvim.logcat"] = { exec = function(argv, _, cb) got = argv cb("", true) end }
     package.loaded["anvim.devices"] = nil
     local d = require("anvim.devices")
     d.list()
@@ -127,10 +127,10 @@ return function(ctx)
       table.concat(got, " "))
   end)
 
-  run("devices: adb_exec tanpa -s untuk connect", function()
+  run("devices: adb_exec tanpa -s untuk connect (ke logcat)", function()
     setup()
     local got
-    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    package.loaded["anvim.logcat"] = { exec = function(argv, _, cb) got = argv cb("", true) end }
     package.loaded["anvim.devices"] = nil
     local d = require("anvim.devices")
     d.list()
@@ -142,7 +142,7 @@ return function(ctx)
   run("devices: adb_pick connect validasi IP:port", function()
     setup()
     local got, warned = nil, false
-    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    package.loaded["anvim.logcat"] = { exec = function(argv, _, cb) got = argv cb("", true) end }
     package.loaded["anvim.status-alert"] = { info = function() end,
       warn = function() warned = true end, error = function() end, ok = function() end, debug = function() end }
     mock.raw("ui.select", function(_, _, cb) cb("connect (IP:port)…") end)
@@ -161,7 +161,7 @@ return function(ctx)
   run("devices: adb_pick custom strip kata adb", function()
     setup()
     local got
-    package.loaded["anvim.tasks"] = { run_custom = function(cmd) got = cmd end }
+    package.loaded["anvim.logcat"] = { exec = function(argv, _, cb) got = argv cb("", true) end }
     mock.raw("ui.select", function(_, _, cb) cb("custom adb…") end)
     mock.raw("fn.inputsave", function() end)
     mock.raw("fn.inputrestore", function() end)

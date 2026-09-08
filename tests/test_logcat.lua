@@ -176,4 +176,38 @@ return function(ctx)
     assert(stopped == true, "close harus stop job")
     assert(lc.running == false and lc.job_id == nil)
   end)
+
+  run("logcat: exec streaming ke viewer + on_done", function()
+    local cbs = {}
+    mock.raw("fn.jobstart", function(cmd, opts)
+      cbs = opts
+      return 11
+    end)
+    lc.history = {}
+    lc.buf = nil
+    lc.win = nil
+    lc.running = false
+    local out, ok_v
+    lc.exec({ "adb", "connect", "1.2.3.4:5555" }, "adb connect 1.2.3.4:5555",
+      function(o, ok) out, ok_v = o, ok end)
+    cbs.on_stdout(nil, { "connected to 1.2.3.4:5555" })
+    cbs.on_exit(nil, 0)
+    assert(ok_v == true, "exec sukses")
+    assert(out:find("connected to", 1, true), "output diteruskan")
+    local joined = table.concat(lc.history, "\n")
+    assert(joined:find("$ adb connect", 1, true), "prompt tercatat")
+    assert(joined:find("connected to", 1, true), "hasil streaming ke history")
+  end)
+
+  run("devices: adb_exec routing ke logcat bukan task", function()
+    local via = nil
+    package.loaded["anvim.logcat"] = { exec = function() via = "logcat" end }
+    package.loaded["anvim.tasks"] = { run_custom = function() via = "task" end }
+    local init_m = mock
+    init_m.raw("fn.executable", function() return 1 end)
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    d.adb_exec({ "shell", "echo" }, {}, function() end)
+    assert(via == "logcat", "adb harus ke logcat, got " .. tostring(via))
+  end)
 end

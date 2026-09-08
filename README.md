@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.6.6** — Stable (honest connect, no record)
+> **v1.6.8** — Stable (honest connect, no record)
 
 ## Features
 
@@ -12,8 +12,8 @@
 - **Device sections** — Emulator/Scrcpy appear only when an adb device is connected, hidden otherwise
 - **Detection** — canonical `~/.local/bin` first, then PATH, SDK paths, `ANDROID_HOME`, then your folders (`~/Downloads`, `~/Documents`, `detect.extra_dirs`). Deep folder search runs **after** the dashboard opens (or when you trigger `:AnvimCheck`), never blocking it
 - **Installer** — download → checksum → extract → symlink into `~/.local/bin`, no sudo, multi-shell PATH; `:AnvimCheck` auto-repairs old installs
-- **Tasks** — run / clean / build / test / custom, timeout + cancel, split output + quickfix
-- **Logcat** — live view, level/tag filters, save to file, clipboard copy
+- **Tasks** — run / clean / build / test / custom, timeout + cancel, split output + quickfix (finite jobs only)
+- **Logcat** — live view, level/tag filters, save to file, clipboard copy; also shows adb console output (same device context)
 - **Devices** — multi-device select (`-s` everywhere, `ANDROID_SERIAL` for Gradle), offline/unauthorized warnings, persistent active device
 - **Emulator** — list AVDs, launch (cold/quick/wipe), kill, boot wait + auto-select
 - **Scrcpy** — show + control phone per device (`scrcpy -s id`, no extra flags); replaces emulator section when installed (install via `:AnvimCheck`)
@@ -97,7 +97,7 @@ Custom tasks appear in the dashboard (★). No line highlights at all — cursor
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 160 unit tests, no framework
+nvim --headless -l tests/run.lua   # 166 unit tests, no framework
 ```
 
 ## Roadmap

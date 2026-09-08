@@ -20,6 +20,10 @@ return function(ctx)
     mock.raw("fn.system", function() return "" end)
     mock.raw("fn.jobstart", function() return 9 end)
     mock.raw("fn.jobstop", function() end)
+    mock.raw("fn.jobpid", function(id)
+      if id == 9 then return 1234 end
+      error("no such job")
+    end)
     mock.raw("log.levels", { INFO = 0, WARN = 1, ERROR = 2, DEBUG = 3 })
     package.loaded["anvim.status-alert"] = { info = function() end, warn = function() end, error = function() end, ok = function() end, debug = function() end }
     package.loaded["anvim.config"] = {
@@ -79,6 +83,36 @@ return function(ctx)
     assert(s.is_running("RF123") == true)
     s.stop("RF123")
     assert(s.is_running("RF123") == false)
+  end)
+
+  run("scrcpy: stop ganda idempoten", function()
+    setup()
+    local info_n = 0
+    package.loaded["anvim.status-alert"] = { info = function() info_n = info_n + 1 end,
+      warn = function() end, error = function() end, ok = function() end, debug = function() end }
+    package.loaded["anvim.scrcpy"] = nil
+    package.loaded["anvim.util"] = nil
+    local s = require("anvim.scrcpy")
+    local d1, d2
+    s.stop("RF123", function(ok) d1 = ok end)
+    assert(d1 == false, "stop tanpa jalan harus false")
+    s.launch("RF123", {}, function() end)
+    s.stop("RF123", function(ok) d2 = ok end)
+    assert(d2 == true)
+    local d3
+    s.stop("RF123", function(ok) d3 = ok end)
+    assert(d3 == false, "stop kedua harus false")
+  end)
+
+  run("scrcpy: is_running bersihkan job basi", function()
+    setup()
+    mock.raw("fn.jobpid", function() error("dead") end)
+    package.loaded["anvim.scrcpy"] = nil
+    package.loaded["anvim.util"] = nil
+    local s = require("anvim.scrcpy")
+    s.jobs["RF123"] = 9
+    assert(s.is_running("RF123") == false, "job mati harus false")
+    assert(s.jobs["RF123"] == nil, "entri basi harus dibersihkan")
   end)
 
   run("scrcpy: launch tolak tanpa binary", function()

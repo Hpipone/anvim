@@ -33,7 +33,14 @@ end
 
 function M.is_running(device_id)
   local job = M.jobs[device_id]
-  return job ~= nil
+  if not job then return false end
+  -- job mati di luar (user kill manual) → bersihkan entri basi
+  local alive = pcall(vim.fn.jobpid, job)
+  if not alive then
+    M.jobs[device_id] = nil
+    return false
+  end
+  return true
 end
 
 local function valid_device(device_id)
@@ -56,7 +63,7 @@ end
 function M.launch(device_id, opts, on_done)
   on_done = on_done or function() end
   opts = opts or {}
-  if M.jobs[device_id] then
+  if M.is_running(device_id) then
     alert.info("Scrcpy already running for " .. device_id)
     on_done(true)
     return
@@ -95,14 +102,18 @@ function M.launch(device_id, opts, on_done)
   M.jobs[device_id] = job
 end
 
---- Hentikan mirror: jobstop + pkill fallback (posix).
+--- Hentikan scrcpy yang dilacak anvim. Idempoten: stop ke-2 dst lapor
+--- "already stopped" tanpa pkill (proses manual user tidak disentuh).
 function M.stop(device_id, on_done)
   on_done = on_done or function() end
-  local job = M.jobs[device_id]
-  if job then
-    pcall(vim.fn.jobstop, job)
-    M.jobs[device_id] = nil
+  if not M.is_running(device_id) then
+    alert.info("Scrcpy already stopped: " .. tostring(device_id))
+    on_done(false)
+    return
   end
+  local job = M.jobs[device_id]
+  M.jobs[device_id] = nil
+  pcall(vim.fn.jobstop, job)
   if OS ~= "windows" then
     pcall(vim.fn.system, "pkill -f " .. util.esc("scrcpy.*" .. device_id) .. " 2>/dev/null")
   end
@@ -128,20 +139,20 @@ function M.pick()
     alert.warn("No online devices for scrcpy.")
     return
   end
-  if #list == 1 and not M.jobs[list[1].id] then
+  if #list == 1 and not M.is_running(list[1].id) then
     M.launch(list[1].id, {})
     return
   end
   local labels = {}
   for _, d in ipairs(list) do
-    local st = M.jobs[d.id] and "● scrcpy on" or "○ scrcpy"
+    local st = M.is_running(d.id) and "● scrcpy on" or "○ scrcpy"
     table.insert(labels, st .. "  " .. d.id .. " (" .. (d.model or "?") .. ")")
   end
   vim.ui.select(labels, { prompt = "Scrcpy device:" }, function(choice)
     if not choice then return end
     local id = M._id_from_label(choice)
     if not id then return end
-    if M.jobs[id] then
+    if M.is_running(id) then
       M.stop(id)
       return
     end

@@ -221,13 +221,14 @@ function M.adb_exec(argv, opts, on_done)
     vim.list_extend(cmd, { "-s", active })
   end
   for _, a in ipairs(argv) do table.insert(cmd, a) end
-  local ok_t, tasks = pcall(require, "anvim.tasks")
-  if not ok_t then
-    alert.error("adb", "tasks module failed to load")
-    on_done(false)
+  -- output ke viewer logcat (device aktif dilogcat), bukan task window
+  local ok_l, logcat = pcall(require, "anvim.logcat")
+  if not ok_l then
+    alert.error("adb", "logcat module failed to load")
+    on_done("", false)
     return
   end
-  tasks.run_custom(cmd, "adb " .. table.concat(argv, " "), function(output, ok)
+  logcat.exec(cmd, "adb " .. table.concat(argv, " "), function(output, ok)
     on_done(output, ok)
   end)
 end

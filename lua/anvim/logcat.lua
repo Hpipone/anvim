@@ -54,6 +54,33 @@ local function trim_history()
   end
 end
 
+--- Tulis baris ke history + buffer viewer (bila ada).
+local function emit_lines(lines)
+  if not lines or #lines == 0 then return end
+  local clean = {}
+  for _, line in ipairs(lines) do
+    if line ~= "" then
+      table.insert(M.history, line)
+      table.insert(clean, line)
+    end
+  end
+  trim_history()
+  local buf = M.buf
+  if #clean > 0 and buf and vim.api.nvim_buf_is_valid(buf) then
+    pcall(function()
+      vim.bo[buf].modifiable = true
+      local last = vim.api.nvim_buf_line_count(buf)
+      vim.api.nvim_buf_set_lines(buf, last, last, false, clean)
+      local max = cfg_logcat().max_lines
+      local count = vim.api.nvim_buf_line_count(buf)
+      if count > max + 100 then
+        vim.api.nvim_buf_set_lines(buf, 0, count - max, false, {})
+      end
+      vim.bo[buf].modifiable = false
+    end)
+  end
+end
+
 local function start_logcat(buf, filter, tag)
   local has_adb = false
   pcall(function() has_adb = require("anvim.system_check").adb_bin() ~= nil end)
@@ -68,27 +95,7 @@ local function start_logcat(buf, filter, tag)
     on_stdout = vim.schedule_wrap(function(_, data)
       if not M.running then return end
       if not data then return end
-      local new_lines = {}
-      for _, line in ipairs(data) do
-        if line ~= "" then
-          table.insert(M.history, line)
-          table.insert(new_lines, line)
-        end
-      end
-      trim_history()
-      if #new_lines > 0 and buf and vim.api.nvim_buf_is_valid(buf) then
-        pcall(function()
-          vim.bo[buf].modifiable = true
-          local last = vim.api.nvim_buf_line_count(buf)
-          vim.api.nvim_buf_set_lines(buf, last, last, false, new_lines)
-          local max = cfg_logcat().max_lines
-          local count = vim.api.nvim_buf_line_count(buf)
-          if count > max + 100 then
-            vim.api.nvim_buf_set_lines(buf, 0, count - max, false, {})
-          end
-          vim.bo[buf].modifiable = false
-        end)
-      end
+      emit_lines(data)
     end),
     on_stderr = function(_, data)
       if data and #data > 0 and data[1] ~= "" then
@@ -249,6 +256,53 @@ function M.stop()
   if M.job_id then
     pcall(vim.fn.jobstop, M.job_id)
     M.job_id = nil
+  end
+end
+
+--- Jalankan one-shot command (mis. adb connect), output streaming
+--- ke viewer ini — bukan task window. on_done(output, ok).
+--- Viewer dibuka bila belum ada (tanpa ganggu job live yang jalan).
+function M.exec(argv, label, on_done)
+  on_done = on_done or function() end
+  if type(argv) ~= "table" or #argv == 0 then
+    on_done("", false)
+    return
+  end
+  M.open()
+  if not (M.buf and vim.api.nvim_buf_is_valid(M.buf)) then
+    on_done("", false)
+    return
+  end
+  label = label or table.concat(argv, " ")
+  emit_lines({ "", "$ " .. label })
+  local out_lines = {}
+  local job = vim.fn.jobstart(argv, {
+    stdout_buffered = false,
+    stderr_buffered = false,
+    on_stdout = vim.schedule_wrap(function(_, data)
+      if data then
+        for _, l in ipairs(data) do
+          if l ~= "" then table.insert(out_lines, l) end
+        end
+        emit_lines(data)
+      end
+    end),
+    on_stderr = vim.schedule_wrap(function(_, data)
+      if data then
+        for _, l in ipairs(data) do
+          if l ~= "" then table.insert(out_lines, l) end
+        end
+        emit_lines(data)
+      end
+    end),
+    on_exit = function(_, code)
+      local output = table.concat(out_lines, "\n")
+      on_done(output, code == 0)
+    end,
+  })
+  if job == nil or job <= 0 then
+    alert.error("logcat exec", "jobstart failed: " .. label)
+    on_done("", false)
   end
 end
 

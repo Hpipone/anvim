@@ -60,6 +60,49 @@ return function(ctx)
     assert(ok_v == true)
   end)
 
+  run("tasks: run android sukses auto-launch monkey", function()
+    setup()
+    local launched = nil
+    mock.raw("fn.jobstart", function(cmd, opts)
+      if tostring(cmd[1]):find("gradle") then
+        if opts and opts.on_exit then opts.on_exit(nil, 0) end
+        return 5
+      end
+      launched = cmd
+      if opts and opts.on_exit then opts.on_exit(nil, 0) end
+      return 6
+    end)
+    package.loaded["anvim.devices"] = { get_active = function() return "emulator-5554" end }
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local ok_v
+    t.run({ type = "android", build_tool = "gradle", root = "/tmp/proj", package = "com.test.app" }, "run",
+      function(_, ok) ok_v = ok end)
+    assert(ok_v == true)
+    assert(launched ~= nil, "monkey harus jalan")
+    local j = table.concat(launched, " ")
+    assert(j:find("monkey", 1, true) and j:find("com.test.app", 1, true), "got: " .. j)
+    assert(j:find("emulator-5554", 1, true) or j:find("-s", 1, true),
+      "device harus diteruskan: " .. j)
+  end)
+
+  run("tasks: run android tanpa package tetap sukses", function()
+    setup()
+    local launched = false
+    mock.raw("fn.jobstart", function(_, opts)
+      if opts and opts.on_exit then opts.on_exit(nil, 0) end
+      launched = true
+      return 5
+    end)
+    package.loaded["anvim.devices"] = { get_active = function() return nil end }
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local ok_v
+    t.run({ type = "android", build_tool = "gradle", root = "/tmp/proj", package = nil }, "run",
+      function(_, ok) ok_v = ok end)
+    assert(ok_v == true, "install sukses walau tanpa launch")
+  end)
+
   run("tasks: tolak jika binary hilang", function()
     setup()
     mock.raw("fn.executable", function() return 0 end)
