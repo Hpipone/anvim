@@ -258,4 +258,33 @@ return function(ctx)
     captured.opts.on_stderr(nil, { "Enter pairing code: " })
     assert(captured.sent == "111222\n", "stderr harus dipantau")
   end)
+
+  run("devices: pair kirim gagal lapor error asli", function()
+    setup()
+    local captured = {}
+    local warns = {}
+    mock.raw("fn.jobstart", function(_, opts)
+      captured.opts = opts
+      return 21
+    end)
+    mock.raw("fn.chansend", function() error("E900: Invalid channel id") end)
+    mock.raw("fn.jobstop", function() end)
+    mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
+    mock.raw("fn.inputsave", function() end)
+    mock.raw("fn.inputrestore", function() end)
+    mock.raw("fn.input", function() return "123456" end)
+    mock.raw("defer_fn", function() end)
+    package.loaded["anvim.status-alert"] = { info = function() end,
+      warn = function(m) table.insert(warns, m) end, error = function() end, ok = function() end, debug = function() end }
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    local done = nil
+    d.adb_pair("192.168.1.5:37099", function(ok) done = ok end)
+    captured.opts.on_stderr(nil, { "error: protocol fault (timeout)" })
+    captured.opts.on_stdout(nil, { "Enter pairing code: " })
+    assert(done == false)
+    local joined = table.concat(warns, "\n")
+    assert(joined:find("protocol fault", 1, true), "harus tampilkan error adb: " .. joined)
+    assert(not joined:find("channel closed", 1, true), "jangan salahkan channel: " .. joined)
+  end)
 end

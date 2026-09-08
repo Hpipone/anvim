@@ -222,10 +222,21 @@ function M.adb_pair(target, on_done)
   alert.info("Pairing with " .. target .. " — check the code on your phone screen")
   local finished, prompted = false, false
   local outbuf = {}
+  local exit_code = nil
   local function finish(ok)
     if finished then return end
     finished = true
     on_done(ok)
+  end
+  -- Baris error terakhir adb untuk pesan yang jujur (bukan "channel closed").
+  local function last_error()
+    for i = #outbuf, 1, -1 do
+      local l = vim.trim(outbuf[i] or "")
+      if l ~= "" and not l:lower():find("pairing code", 1, true) then
+        return l
+      end
+    end
+    return nil
   end
   local function maybe_prompt(job)
     if finished or prompted then return end
@@ -246,10 +257,17 @@ function M.adb_pair(target, on_done)
         finish(false)
         return
       end
-      if pcall(vim.fn.chansend, job, vim.trim(code) .. "\n") == false then
-        alert.warn("Pair channel closed — try again")
-        finish(false)
+      -- adb bisa sudah exit duluan (prompt + mati hampir bersamaan
+      -- saat koneksi gagal) → laporkan hasil asli, bukan "channel closed"
+      local sent_ok = pcall(vim.fn.chansend, job, vim.trim(code) .. "\n")
+      if sent_ok then return end
+      if exit_code ~= nil then
+        finish(exit_code == 0)
+        return
       end
+      local err = last_error()
+      alert.warn("Pair failed for " .. target .. (err and (": " .. err) or ""))
+      finish(false)
     end)
   end
   local job = vim.fn.jobstart({ adb_bin, "pair", target }, {
@@ -266,10 +284,13 @@ function M.adb_pair(target, on_done)
       maybe_prompt(job)
     end,
     on_exit = function(_, code)
+      exit_code = code
+      if finished then return end -- verdict sudah disampaikan di jalur kirim
       if code == 0 then
         alert.ok("Paired with " .. target .. " — now connect IP:port")
       else
-        alert.warn("Pair failed for " .. target)
+        local err = last_error()
+        alert.warn("Pair failed for " .. target .. (err and (": " .. err) or ""))
       end
       finish(code == 0)
     end,
