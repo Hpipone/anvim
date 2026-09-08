@@ -1,6 +1,5 @@
--- anvim: health — shim kompatibilitas, delegasi ke system_check (single source).
--- Modul lama dipertahankan agar require("anvim.health") tidak crash,
--- tapi seluruh logika memakai system_check.check_all + version.
+-- anvim: health — compat shim delegating to system_check (single source).
+-- Kept so require("anvim.health") never crashes; all logic lives in system_check.
 
 local M = {}
 

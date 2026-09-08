@@ -173,7 +173,7 @@ function M.wait_boot(device_id, timeout_ms, on_done)
   local function poll()
     if M._timers["boot:" .. device_id] ~= timer then return end -- di-cancel
     if vim.uv.now() - start > timeout_ms then
-      alert.warn("Emulator boot timeout (" .. math.floor(timeout_ms / 1000) .. "s) — cek manual via adb devices.")
+      alert.warn("Emulator boot timeout (" .. math.floor(timeout_ms / 1000) .. "s) — check manually via adb devices.")
       finish(false)
       return
     end
@@ -221,10 +221,10 @@ end
 function M.launch(avd, opts, on_done)
   on_done = on_done or function() end
   opts = opts or {}
-  if not avd or avd == "" then alert.warn("AVD name kosong.") on_done(false) return end
+  if not avd or avd == "" then alert.warn("Empty AVD name.") on_done(false) return end
   local bin = M.find_binary()
   if not bin then
-    alert.warn("Emulator binary tidak ditemukan. Install Android SDK Emulator + set ANDROID_HOME.")
+    alert.warn("Emulator binary not found. Install Android SDK Emulator + set ANDROID_HOME.")
     on_done(false)
     return
   end
@@ -245,19 +245,19 @@ function M.launch(avd, opts, on_done)
     end,
   })
   if job == nil or job <= 0 then
-    alert.error("emulator", "jobstart gagal: " .. table.concat(cmd, " "))
+    alert.error("emulator", "jobstart failed: " .. table.concat(cmd, " "))
     on_done(false)
     return
   end
   local timeout = cfg_boot_timeout()
   wait_new_emulator(known, math.min(timeout, 60000), function(new_id)
     if not new_id then
-      alert.warn("Emulator " .. avd .. " launching — belum muncul di adb devices, cek manual.")
+      alert.warn("Emulator " .. avd .. " launching — not in adb devices yet, check manually.")
       on_done(true)
       return
     end
     pcall(function() require("anvim.devices").set_active(new_id) end)
-    alert.info("Emulator muncul: " .. new_id .. " — menunggu boot...")
+    alert.info("Emulator up: " .. new_id .. " — waiting for boot...")
     M.wait_boot(new_id, timeout, function(booted)
       on_done(booted)
     end)
@@ -267,14 +267,14 @@ end
 --- Kill emulator yang sedang jalan via `adb -s <id> emu kill`.
 function M.kill(device_id, on_done)
   on_done = on_done or function() end
-  if not device_id or device_id == "" then alert.warn("Pilih emulator dulu.") on_done(false) return end
-  if vim.fn.executable("adb") == 0 then alert.warn("Butuh ADB.") on_done(false) return end
+  if not device_id or device_id == "" then alert.warn("Select an emulator first.") on_done(false) return end
+  if vim.fn.executable("adb") == 0 then alert.warn("ADB required.") on_done(false) return end
   M.cancel_wait("boot:" .. device_id)
   M.cancel_wait("new")
   alert.info("Killing emulator: " .. device_id)
   local ok, out = pcall(vim.fn.system, "adb -s " .. util.esc(device_id) .. " emu kill 2>&1")
   if not ok then
-    alert.error("emulator", "kill gagal: " .. tostring(out))
+    alert.error("emulator", "kill failed: " .. tostring(out))
     on_done(false)
     return
   end
@@ -291,7 +291,7 @@ function M.kill(device_id, on_done)
         if d.id == device_id then gone = false end
       end
     end)
-    if gone then alert.ok("Emulator dimatikan: " .. device_id) else alert.warn(device_id .. " masih terlihat — coba lagi.") end
+    if gone then alert.ok("Emulator killed: " .. device_id) else alert.warn(device_id .. " still visible — try again.") end
     on_done(gone)
   end, 1500)
 end
@@ -301,9 +301,9 @@ function M.pick_and_launch()
   local avds = M.list_avds()
   if #avds == 0 then
     if not M.find_binary() then
-      alert.warn("Emulator tidak ditemukan. Install via Android Studio SDK Manager (SDK Tools → Android Emulator) + buat AVD.")
+      alert.warn("Emulator not found. Install via Android Studio SDK Manager (SDK Tools → Android Emulator) + create an AVD.")
     else
-      alert.warn("Belum ada AVD. Buat dulu: emulator -list-avds kosong. (Android Studio → Device Manager → Create Device)")
+      alert.warn("No AVDs yet (emulator -list-avds is empty). Create one via Android Studio → Device Manager.")
     end
     return
   end
@@ -337,7 +337,7 @@ function M.pick_and_kill()
     if d.id:match("^emulator%-") then table.insert(running, d.id .. " (" .. d.status .. ")") end
   end
   if #running == 0 then
-    alert.info("Tidak ada emulator yang jalan.")
+    alert.info("No running emulator.")
     return
   end
   vim.ui.select(running, { prompt = "Kill emulator:" }, function(choice)

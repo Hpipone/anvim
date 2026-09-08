@@ -68,7 +68,7 @@ function M.list()
 
   local ok, out = pcall(vim.fn.system, "adb devices -l 2>/dev/null")
   if not ok or not out then
-    alert.debug("devices", "adb devices gagal — " .. tostring(out))
+    alert.debug("devices", "adb devices failed — " .. tostring(out))
     M.state.list = {}
     return {}
   end
@@ -99,10 +99,10 @@ function M.list()
   -- warning untuk unauthorized/offline
   for _, d in ipairs(devices) do
     if d.status == "unauthorized" then
-      alert.warn("Device " .. d.id .. " unauthorized — setujui RSA di HP.")
+      alert.warn("Device " .. d.id .. " unauthorized — approve RSA on the phone.")
       break
     elseif d.status == "offline" then
-      alert.warn("Device " .. d.id .. " offline — cabut/colok ulang atau adb reconnect.")
+      alert.warn("Device " .. d.id .. " offline — replug or run adb reconnect.")
       break
     end
   end
@@ -119,14 +119,14 @@ function M.set_active(id)
   for _, d in ipairs(M.state.list) do
     if d.id == id then
       if d.status ~= "device" then
-        alert.warn("Device " .. id .. " status " .. d.status .. " — tetap dipilih tapi task mungkin gagal.")
+        alert.warn("Device " .. id .. " status " .. d.status .. " — kept selected but tasks may fail.")
       end
       M.state.active = id
       persist_save(id)
       return true
     end
   end
-  alert.warn("Device " .. id .. " tidak ada di daftar. Refresh dulu.")
+  alert.warn("Device " .. id .. " not in the list. Refresh first.")
   return false
 end
 

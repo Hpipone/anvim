@@ -196,4 +196,22 @@ return function(ctx)
     assert(found == true, "scrcpy harus installable")
     sc._ui_close()
   end)
+
+  run("system_check: required_tools scoped per tipe", function()
+    setup()
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    local node = sc.required_tools("node")
+    local has = function(t, n)
+      for _, x in ipairs(t) do if x == n then return true end end
+      return false
+    end
+    assert(has(node, "node") and has(node, "git"), table.concat(node, ","))
+    assert(not has(node, "flutter"), "node tak boleh ditagih flutter")
+    local fl = sc.required_tools("flutter")
+    assert(has(fl, "adb") and has(fl, "flutter") and not has(fl, "gradle"))
+    local an = sc.required_tools("android")
+    assert(has(an, "java") and has(an, "gradle") and not has(an, "flutter"))
+  end)
 end

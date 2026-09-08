@@ -79,3 +79,10 @@
 - [x] Monorepo walk-up (marker terdekat cwd → git root)
 - [x] Tests 136 pass (17 suites)
 
+## Fase 9 — scoped alerts + override + English (DONE, v1.4.0)
+- [x] Selection identity: rebuild tidak geser highlight; nav bounded (no wrap)
+- [x] required_tools per tipe (node tak ditagih flutter); health_check.tools=nil = auto
+- [x] Override: setup({project={type}}) + .anvim.json; nearest-marker menang
+- [x] Alerts English konsisten
+- [x] Tests 140 pass (17 suites)
+

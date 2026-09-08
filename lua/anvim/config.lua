@@ -4,7 +4,7 @@
 local M = {}
 
 M.defaults = {
-  version = "1.3.1",
+  version = "1.4.0",
   dashboard = {
     width = 0.8,
     height = 0.8,
@@ -15,7 +15,10 @@ M.defaults = {
   },
   health_check = {
     auto = true,
-    tools = { "adb", "java", "git", "flutter", "gradle", "scrcpy" },
+    tools = nil, -- nil = otomatis mengikuti tipe project (scoped)
+  },
+  project = {
+    type = nil, -- paksa: "flutter"|"android"|"node" (kalahkan auto-detect)
   },
   logcat = {
     max_lines = 5000,

@@ -41,6 +41,30 @@ local function git_branch(r)
   return nil
 end
 
+local VALID_TYPES = { flutter = true, android = true, node = true }
+
+--- Tipe paksa dari user: setup({project={type=...}}) menang atas
+--- file .anvim.json ({"type":"node"}) di root. Return type atau nil.
+function M.forced_type()
+  local ok_c, cfg = pcall(function() return require("anvim.config").get() end)
+  if ok_c and cfg and cfg.project and VALID_TYPES[cfg.project.type] then
+    return cfg.project.type
+  end
+  local ok_r, r = pcall(root)
+  if ok_r and r and r ~= "" then
+    local f = io.open(join(r, ".anvim.json"), "r")
+    if f then
+      local content = f:read("*a")
+      f:close()
+      local ok_d, data = pcall(vim.json.decode, content or "")
+      if ok_d and type(data) == "table" and VALID_TYPES[data.type] then
+        return data.type
+      end
+    end
+  end
+  return nil
+end
+
 local MARKERS = { "pubspec.yaml", "settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts", "package.json" }
 
 --- Cari marker dari start naik sampai stop (inklusif). Return dir atau nil.
@@ -65,33 +89,42 @@ end
 
 function M.detect()
   local ok, result = pcall(function()
-    local r = root()
-    if has_file_abs(join(r, "pubspec.yaml")) then return M.detect_flutter(r) end
-    if has_file_abs(join(r, "settings.gradle")) or has_file_abs(join(r, "settings.gradle.kts"))
-      or has_file_abs(join(r, "build.gradle")) or has_file_abs(join(r, "build.gradle.kts")) then
-      return M.detect_android(r)
+    -- 0. override manual: setup({project={type=...}}) > .anvim.json > auto
+    local forced = M.forced_type()
+    if forced then
+      local r = root()
+      -- pakai dir marker terdekat yang cocok bila ada, fallback root
+      local dir = r
+      local hit = find_marker_upward(vim.fn.getcwd(), r)
+      if hit then
+        if forced == "flutter" and has_file_abs(join(hit, "pubspec.yaml")) then dir = hit end
+        if forced == "android" and (has_file_abs(join(hit, "settings.gradle")) or has_file_abs(join(hit, "settings.gradle.kts"))
+          or has_file_abs(join(hit, "build.gradle")) or has_file_abs(join(hit, "build.gradle.kts"))) then dir = hit end
+        if forced == "node" and has_file_abs(join(hit, "package.json")) then dir = hit end
+      end
+      if forced == "flutter" then return M.detect_flutter(dir) end
+      if forced == "android" then return M.detect_android(dir) end
+      if forced == "node" then return M.detect_node(dir) end
     end
-    -- fallback cwd-relatif (legacy, untuk test & non-git)
+    local r = root()
+    local cwd = vim.fn.getcwd()
+    -- 1. marker TERDEKAT menang: jalan ke atas dari cwd sampai root.
+    --    (Root tidak lagi menutupi sub-project, mis. node di monorepo flutter.)
+    local hit = find_marker_upward(cwd, r)
+    if hit then
+      if has_file_abs(join(hit, "pubspec.yaml")) then return M.detect_flutter(hit) end
+      if has_file_abs(join(hit, "settings.gradle")) or has_file_abs(join(hit, "settings.gradle.kts"))
+        or has_file_abs(join(hit, "build.gradle")) or has_file_abs(join(hit, "build.gradle.kts")) then
+        return M.detect_android(hit)
+      end
+      if has_file_abs(join(hit, "package.json")) then return M.detect_node(hit) end
+    end
+    -- 2. fallback cwd-relatif (legacy, untuk test & non-git)
     if vim.fn.filereadable("pubspec.yaml") == 1 then return M.detect_flutter(vim.fn.getcwd()) end
     if vim.fn.filereadable("settings.gradle") == 1 or vim.fn.filereadable("build.gradle") == 1 then
       return M.detect_android(vim.fn.getcwd())
     end
-    -- project node/js (npm scripts: dev/build/test) — mis. React Native/Expo/Capacitor
-    if has_file_abs(join(r, "package.json")) then return M.detect_node(r) end
     if vim.fn.filereadable("package.json") == 1 then return M.detect_node(vim.fn.getcwd()) end
-    -- monorepo: marker di subdir — jalan ke atas dari cwd sampai root
-    local cwd = vim.fn.getcwd()
-    if cwd ~= r then
-      local hit = find_marker_upward(cwd, r)
-      if hit then
-        if has_file_abs(join(hit, "pubspec.yaml")) then return M.detect_flutter(hit) end
-        if has_file_abs(join(hit, "settings.gradle")) or has_file_abs(join(hit, "settings.gradle.kts"))
-          or has_file_abs(join(hit, "build.gradle")) or has_file_abs(join(hit, "build.gradle.kts")) then
-          return M.detect_android(hit)
-        end
-        if has_file_abs(join(hit, "package.json")) then return M.detect_node(hit) end
-      end
-    end
     return nil
   end)
   if not ok then

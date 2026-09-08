@@ -77,12 +77,12 @@ local function valid_device(device_id)
   for _, d in ipairs(dev.list()) do
     if d.id == device_id then
       if d.status ~= "device" then
-        alert.warn("Device " .. device_id .. " status " .. d.status .. " — mirror mungkin gagal.")
+        alert.warn("Device " .. device_id .. " status " .. d.status .. " — mirror may fail.")
       end
       return true
     end
   end
-  alert.warn("Device " .. device_id .. " tidak terhubung.")
+  alert.warn("Device " .. device_id .. " not connected.")
   return false
 end
 
@@ -91,12 +91,12 @@ function M.launch(device_id, opts, on_done)
   on_done = on_done or function() end
   opts = opts or {}
   if M.jobs[device_id] then
-    alert.info("Scrcpy sudah jalan untuk " .. device_id)
+    alert.info("Scrcpy already running for " .. device_id)
     on_done(true)
     return
   end
   if not M.find_binary() then
-    alert.warn("Scrcpy belum install — buka :AnvimCheck untuk install.")
+    alert.warn("Scrcpy not installed — open :AnvimCheck to install.")
     vim.schedule(function()
       local ok, sys = pcall(require, "anvim.system_check")
       if ok then sys.interactive() end
@@ -114,15 +114,15 @@ function M.launch(device_id, opts, on_done)
     on_exit = function(_, code)
       M.jobs[device_id] = nil
       if code ~= 0 then
-        alert.warn("Scrcpy berhenti (code " .. tostring(code) .. "): " .. device_id)
+        alert.warn("Scrcpy stopped (code " .. tostring(code) .. "): " .. device_id)
       else
-        alert.info("Scrcpy berhenti: " .. device_id)
+        alert.info("Scrcpy stopped: " .. device_id)
       end
       on_done(code == 0)
     end,
   })
   if job == nil or job <= 0 then
-    alert.error("scrcpy", "jobstart gagal: " .. table.concat(cmd, " "))
+    alert.error("scrcpy", "jobstart failed: " .. table.concat(cmd, " "))
     on_done(false)
     return
   end
@@ -159,7 +159,7 @@ function M.pick()
     if d.status == "device" then table.insert(list, d) end
   end
   if #list == 0 then
-    alert.warn("Tidak ada device online untuk di-mirror.")
+    alert.warn("No online devices to mirror.")
     return
   end
   local labels = {}

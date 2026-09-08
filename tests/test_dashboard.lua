@@ -118,7 +118,28 @@ return function(ctx)
     dash.nav(1)
     assert(dash.state.selected == 4, "harus skip header ke 4, got " .. dash.state.selected)
     dash.nav(1)
-    assert(dash.state.selected == 2, "wrap ke 2, got " .. dash.state.selected)
+    assert(dash.state.selected == 4, "mentok bawah tidak wrap, got " .. dash.state.selected)
+    dash.nav(-1)
+    assert(dash.state.selected == 2, "kembali ke 2, got " .. dash.state.selected)
+    dash.nav(-1)
+    assert(dash.state.selected == 2, "mentok atas tidak wrap, got " .. dash.state.selected)
+  end)
+
+  run("dashboard: refresh pertahankan seleksi", function()
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    -- arahkan ke task Refresh Devices lalu select → rebuild jalan,
+    -- seleksi harus tetap di task yang sama (tidak lompat ke atas)
+    local idx
+    for i, it in ipairs(dash.state.items) do
+      if it.type == "task" and it.task == "devices" then idx = i break end
+    end
+    assert(idx ~= nil, "task devices harus ada")
+    dash.state.selected = idx
+    dash.select()
+    local cur = dash.state.items[dash.state.selected]
+    assert(cur and cur.type == "task" and cur.task == "devices",
+      "seleksi harus tetap di Refresh Devices")
   end)
 
   run("dashboard: close cleans state", function()
@@ -470,9 +491,20 @@ return function(ctx)
 
   run("dashboard: node cek node + label npm", function()
     local got_tools
+    package.loaded["anvim.config"] = {
+      get = function() return {
+        dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
+        health_check = { auto = false }, -- tanpa tools = auto scoped
+        tasks = { custom = {} },
+      } end,
+    }
     package.loaded["anvim.system_check"] = {
       check_all = function(tools, _) got_tools = tools return {} end,
       format_line = function() return "x" end,
+      required_tools = function(t)
+        if t == "node" then return { "node", "git" } end
+        return { "adb", "java", "git", "flutter", "gradle" }
+      end,
     }
     package.loaded["anvim.project"] = {
       detect = function() return { name = "web", type = "node", branch = "main", root = "/tmp/web", scripts = { dev = "x" } } end,

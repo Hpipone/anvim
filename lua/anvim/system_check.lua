@@ -59,9 +59,9 @@ end
 -- ── tool definitions ──
 local TOOLS = {
   adb = {
-    label = "ADB", desc = "Android Debug Bridge — komunikasi device",
+    label = "ADB", desc = "Android Debug Bridge — device communication",
     bin = (OS == "windows") and "adb.exe" or "adb",
-    hint = "Install Android SDK Platform-Tools atau pakai :AnvimCheck auto-download.",
+    hint = "Install Android SDK Platform-Tools or use :AnvimCheck auto-download.",
     url = "https://developer.android.com/studio/command-line",
     ver_arg = "version",
     check_paths = {
@@ -90,9 +90,9 @@ local TOOLS = {
     post_msg = "Download Temurin JDK 17+: https://adoptium.net",
   },
   flutter = {
-    label = "Flutter", desc = "Flutter SDK — UI multiplatform",
+    label = "Flutter", desc = "Flutter SDK — multiplatform UI",
     bin = (OS == "windows") and "flutter.bat" or "flutter",
-    hint = "Install Flutter SDK dan set PATH.",
+    hint = "Install the Flutter SDK and set PATH.",
     url = "https://flutter.dev/docs/get-started/install",
     ver_arg = "--version",
     check_paths = {
@@ -107,9 +107,9 @@ local TOOLS = {
     },
   },
   git = {
-    label = "Git", desc = "Version control — info branch & project version",
+    label = "Git", desc = "Version control — branch & project info",
     bin = (OS == "windows") and "git.exe" or "git",
-    hint = "Install Git dari package manager.",
+    hint = "Install Git from your package manager.",
     url = "https://git-scm.com/downloads",
     ver_arg = "--version",
     check_paths = {
@@ -123,7 +123,7 @@ local TOOLS = {
   gradle = {
     label = "Gradle", desc = "Build tool Android (min 8)",
     bin = (OS == "windows") and "gradle.bat" or "gradle",
-    hint = "Install Gradle atau pakai ./gradlew project.",
+    hint = "Install Gradle or use the project gradlew.",
     url = "https://gradle.org/install",
     ver_arg = "--version",
     check_paths = {
@@ -138,7 +138,7 @@ local TOOLS = {
     },
   },
   emulator = {
-    label = "Emulator", desc = "Android Emulator binary (opsional, untuk AVD)",
+    label = "Emulator", desc = "Android Emulator binary (optional, for AVDs)",
     bin = (OS == "windows") and "emulator.exe" or "emulator",
     hint = "Install via Android Studio SDK Manager → SDK Tools → Android Emulator.",
     url = "https://developer.android.com/studio#command-line-tools-only",
@@ -153,9 +153,9 @@ local TOOLS = {
     post_msg = "Install Android SDK Emulator via Android Studio SDK Manager.",
   },
   scrcpy = {
-    label = "Scrcpy", desc = "Mirror + kontrol HP (pengganti emulator)",
+    label = "Scrcpy", desc = "Mirror + control phone (replaces emulator)",
     bin = (OS == "windows") and "scrcpy.exe" or "scrcpy",
-    hint = "Install scrcpy via :AnvimCheck atau paket distro.",
+    hint = "Install scrcpy via :AnvimCheck or a distro package.",
     url = "https://github.com/Genymobile/scrcpy",
     ver_arg = "--version",
     optional = true,
@@ -165,12 +165,12 @@ local TOOLS = {
       windows = { "scrcpy.exe", WIN_BIN .. "\\scrcpy.exe", "~/.anvim/tools/scrcpy/**/scrcpy.exe" },
     },
     download = scrcpy_download(),
-    post_msg = "Install scrcpy: paket distro (apt/brew/choco) atau :AnvimCheck (x86_64).",
+    post_msg = "Install scrcpy: distro package (apt/brew/choco) or :AnvimCheck (x86_64).",
   },
   node = {
     label = "Node", desc = "Node.js — npm scripts (dev/build/test)",
     bin = (OS == "windows") and "node.exe" or "node",
-    hint = "Install Node.js LTS untuk project npm.",
+    hint = "Install Node.js LTS for npm projects.",
     url = "https://nodejs.org",
     ver_arg = "--version",
     optional = true,
@@ -186,6 +186,25 @@ local TOOLS = {
 
 function M.get_tools_spec()
   return TOOLS
+end
+
+--- Tool yang relevan per tipe project (git selalu ikut sebagai info).
+--- Dashboard + auto-warn pakai ini agar tidak menagih tool tak relevan
+--- (mis. flutter untuk project node).
+function M.required_tools(proj_type)
+  local map = {
+    flutter = { "adb", "flutter" },
+    android = { "adb", "java", "gradle" },
+    node = { "node" },
+  }
+  local list = {}
+  for _, n in ipairs(map[proj_type] or { "adb", "java", "flutter", "git", "gradle" }) do
+    table.insert(list, n)
+  end
+  local has_git = false
+  for _, n in ipairs(list) do if n == "git" then has_git = true break end end
+  if not has_git then table.insert(list, "git") end
+  return list
 end
 
 function M.get_os()
@@ -371,7 +390,7 @@ function M.check_all(only, opts)
     if ok and c and c.health_check and c.health_check.tools then
       only = c.health_check.tools
     else
-      only = { "adb", "java", "flutter", "git", "gradle" }
+      only = { "adb", "java", "flutter", "git", "gradle", "scrcpy" }
     end
   end
   for _, name in ipairs(only) do
@@ -434,19 +453,19 @@ function M.get_env_issues()
   local ah = vim.env.ANDROID_HOME or vim.env.ANDROID_SDK_ROOT
   if not ah or ah == "" then
     table.insert(issues, {
-      label = "ANDROID_HOME belum di-set",
-      hint = 'export ANDROID_HOME="$HOME/Android/Sdk" >> ~/.bashrc (sesuaikan shell)',
+      label = "ANDROID_HOME is not set",
+      hint = 'export ANDROID_HOME="$HOME/Android/Sdk" >> ~/.bashrc (adjust to your shell)',
     })
   elseif vim.fn.isdirectory(vim.fn.expand(ah)) ~= 1 then
     table.insert(issues, {
-      label = "ANDROID_HOME menunjuk ke folder yang tidak ada: " .. ah,
-      hint = "Perbaiki path SDK di shell RC.",
+      label = "ANDROID_HOME points to a missing folder: " .. ah,
+      hint = "Fix the SDK path in your shell RC.",
     })
   end
   local emu = M.results.emulator or M.check_tool("emulator")
   if emu and not emu.found then
     table.insert(issues, {
-      label = "Emulator binary tidak ada (AVD tidak bisa di-list)",
+      label = "Emulator binary missing (cannot list AVDs)",
       hint = "Android Studio → SDK Manager → SDK Tools → Android Emulator.",
     })
   end
@@ -461,7 +480,7 @@ function M.doctor()
   table.insert(lines, "")
   local issues = M.get_env_issues()
   if #issues == 0 then
-    table.insert(lines, "Environment OK — tidak ada masalah.")
+    table.insert(lines, "Environment OK — no issues.")
   else
     for _, is in ipairs(issues) do
       table.insert(lines, "• " .. is.label)
@@ -604,7 +623,7 @@ end
 local function ui_install_queue(names, on_all_done)
   local ins_ok, ins = pcall(require, "anvim.installation")
   if not ins_ok then
-    alert.error("install", "modul installation gagal load")
+    alert.error("install", "installation module failed to load")
     if on_all_done then on_all_done(false) end
     return
   end
@@ -641,7 +660,7 @@ local function ui_install_queue(names, on_all_done)
     ins.install_tool(tool, dl, spec.label, spec.bin, function(ok_done)
       idx = idx + 1
       if not ok_done then
-        alert.error("install", tool .. " gagal — chain berhenti")
+        alert.error("install", tool .. " failed — chain stopped")
         vim.schedule(function()
           M.interactive()
           if on_all_done then on_all_done(false) end
@@ -671,7 +690,7 @@ function M._ui_choose()
     ui_install_queue({ it.name })
   elseif it.kind == "manual" then
     local r = it.result
-    alert.warn((r.label or it.name) .. " harus install manual.\n" .. (r.post_msg or r.hint or ""))
+    alert.warn((r.label or it.name) .. " needs manual install.\n" .. (r.post_msg or r.hint or ""))
   else
     local r = it.result
     alert.info(M.format_line(it.name, r))
@@ -684,7 +703,7 @@ function M._ui_install_all()
     if it.kind == "installable" then table.insert(names, it.name) end
   end
   if #names == 0 then
-    alert.info("Tidak ada tool yang bisa di-download otomatis.")
+    alert.info("No tools available for auto-download.")
     return
   end
   ui_install_queue(names)

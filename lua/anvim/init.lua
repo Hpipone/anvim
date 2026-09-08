@@ -12,7 +12,7 @@ local function register_cmd(name, fn, desc, cmd_opts)
     local ok2, err2 = pcall(fn, opts)
     if not ok2 then alert.error(name, err2) end
   end, def)
-  if not ok then alert.error("init", "gagal buat command " .. name .. " — " .. tostring(err)) end
+  if not ok then alert.error("init", "failed to create command " .. name .. " — " .. tostring(err)) end
 end
 
 function M.setup(opts)
@@ -22,7 +22,7 @@ function M.setup(opts)
 
   local ok, err = pcall(require, "anvim.config")
   if not ok then
-    alert.error("init", "gagal load config — " .. tostring(err))
+    alert.error("init", "failed to load config — " .. tostring(err))
     return
   end
   require("anvim.config").setup(opts)
@@ -107,11 +107,11 @@ function M.setup(opts)
 
   local ok_km1, err_km1 = pcall(vim.keymap.set, "n", "<leader>ad", "<cmd>Anvim<CR>",
     { nowait = true, silent = true, desc = "Open anvim dashboard" })
-  if not ok_km1 then alert.error("init", "gagal set keymap ad — " .. tostring(err_km1)) end
+  if not ok_km1 then alert.error("init", "failed to set keymap ad — " .. tostring(err_km1)) end
 
   local ok_km2, err_km2 = pcall(vim.keymap.set, "n", "<leader>al", "<cmd>AnvimLogcat<CR>",
     { nowait = true, silent = true, desc = "Open anvim logcat" })
-  if not ok_km2 then alert.error("init", "gagal set keymap al — " .. tostring(err_km2)) end
+  if not ok_km2 then alert.error("init", "failed to set keymap al — " .. tostring(err_km2)) end
 end
 
 return M

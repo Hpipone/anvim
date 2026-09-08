@@ -98,7 +98,7 @@ local function start_logcat(buf, filter, tag)
   if job == nil or job <= 0 then
     M.running = false
     M.job_id = nil
-    alert.error("logcat", "jobstart gagal: " .. table.concat(cmd, " "))
+    alert.error("logcat", "jobstart failed: " .. table.concat(cmd, " "))
     return
   end
   M.job_id = job
@@ -129,7 +129,7 @@ local function setup_keymaps(buf)
   end, { buffer = buf, nowait = true, silent = true, desc = "Save logcat" })
   vim.keymap.set("n", "T", function()
     vim.fn.inputsave()
-    local tag = vim.fn.input("Tag filter (kosongkan = reset): ")
+    local tag = vim.fn.input("Tag filter (empty = reset): ")
     vim.fn.inputrestore()
     M.set_tag(tag)
   end, { buffer = buf, nowait = true, silent = true, desc = "Filter by tag" })
@@ -224,7 +224,7 @@ end
 --- Simpan history ke file. Return path atau nil.
 function M.save(path)
   if #M.history == 0 then
-    alert.warn("Logcat kosong — belum ada yang disimpan.")
+    alert.warn("Empty logcat — nothing saved.")
     return nil
   end
   path = path or (vim.fn.expand("~/anvim-logcat-" .. os.date("%Y%m%d-%H%M%S") .. ".log"))

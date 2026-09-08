@@ -2,14 +2,14 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.3.1** — Stable (Fase 8 tech-debt cleanup)
+> **v1.4.0** — Stable (Fase 8 tech-debt cleanup)
 
 ## Features
 
 - **Dashboard** — floating window, keyboard-only (`j/k`, no horizontal drift), LSP diagnostics, auto health warnings, instant open (slow sections load async)
-- **Projects** — Flutter, Android/Gradle, **and Node** (`package.json` scripts: `npm run dev/build/test`). No forced installs: run works with whatever runner the project uses
+- **Projects** — Flutter, Android/Gradle, **and Node** (`package.json` scripts: `npm run dev/build/test`). No forced installs: run works with whatever runner the project uses. Nearest marker wins in monorepos; force via `setup({project={type="node"}})` or `.anvim.json`
+- **System check** — checks only tools relevant to your project type (Node is never nagged about Flutter); detects ADB, Java, Flutter, Git, Gradle (+Emulator, +Scrcpy), enforces minimum versions, one-key auto-install (optional tools offered too)
 - **Device sections** — Emulator/Scrcpy appear only when an adb device is connected, hidden otherwise
-- **System check** — detects ADB, Java, Flutter, Git, Gradle (+Emulator, +Scrcpy), enforces minimum versions, one-key auto-install (optional tools offered too)
 - **Detection** — canonical `~/.local/bin` first, then PATH, SDK paths, `ANDROID_HOME`, then your folders (`~/Downloads`, `~/Documents`, `detect.extra_dirs`). Deep folder search runs **after** the dashboard opens (or when you trigger `:AnvimCheck`), never blocking it
 - **Installer** — download → checksum → extract → symlink into `~/.local/bin`, no sudo, multi-shell PATH; `:AnvimCheck` auto-repairs old installs
 - **Tasks** — run / clean / build / test / custom, timeout + cancel, split output + quickfix
@@ -96,7 +96,7 @@ Custom tasks appear in the dashboard (★). Theming via `AnvimTitle/Header/Selec
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 136 unit tests, no framework
+nvim --headless -l tests/run.lua   # 140 unit tests, no framework
 ```
 
 ## Roadmap

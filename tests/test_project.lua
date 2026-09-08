@@ -91,4 +91,62 @@ return function(ctx)
     assert(r.type == "flutter", "got " .. tostring(r.type))
     assert(r.root == "/tmp/repo/app/mobile", "got " .. tostring(r.root))
   end)
+
+  run("project: marker terdekat kalahkan root (node di monorepo flutter)", function()
+    mock.raw("fn.getcwd", function() return "/tmp/repo/packages/web" end)
+    mock.raw("fn.system", function(cmd)
+      cmd = tostring(cmd)
+      if cmd:find("show%-toplevel") then return "/tmp/repo\n" end
+      if cmd:find("abbrev%-ref") then return "main\n" end
+      return ""
+    end)
+    mock.raw("fn.filereadable", function(name)
+      name = tostring(name)
+      if name == "/tmp/repo/pubspec.yaml" then return 1 end
+      if name == "/tmp/repo/packages/web/package.json" then return 1 end
+      return 0
+    end)
+    mock.raw("fn.isdirectory", function() return 1 end)
+    package.loaded["anvim.config"] = { get = function() return {} end }
+    local orig_open = io.open
+    io.open = function(path, _)
+      if tostring(path):find("package.json") then
+        return { read = function() return '{"name":"web","scripts":{"dev":"vite"}}' end, close = function() end }
+      end
+      return orig_open(path, _)
+    end
+    package.loaded["anvim.project"] = nil
+    package.loaded["anvim.util"] = nil
+    local p = require("anvim.project")
+    local r = p.detect()
+    assert(r.type == "node", "marker terdekat harus menang, got " .. tostring(r.type))
+    assert(r.root == "/tmp/repo/packages/web", "got " .. tostring(r.root))
+    io.open = orig_open
+  end)
+
+  run("project: override config kalahkan auto", function()
+    mock.raw("fn.getcwd", function() return "/tmp/repo" end)
+    mock.raw("fn.system", function() return "main\n" end)
+    mock.raw("fn.filereadable", function(name)
+      if tostring(name) == "/tmp/repo/pubspec.yaml" then return 1 end
+      return 0
+    end)
+    mock.raw("fn.isdirectory", function() return 1 end)
+    package.loaded["anvim.config"] = { get = function() return { project = { type = "node" } } end }
+    local orig_open = io.open
+    io.open = function(path, _)
+      if tostring(path):find("package.json") then
+        return { read = function() return '{"name":"x"}' end, close = function() end }
+      end
+      if tostring(path):find(".anvim.json") then return nil end
+      return orig_open(path, _)
+    end
+    package.loaded["anvim.project"] = nil
+    package.loaded["anvim.util"] = nil
+    local p = require("anvim.project")
+    assert(p.forced_type() == "node")
+    local r = p.detect()
+    assert(r.type == "node", "override harus menang, got " .. tostring(r.type))
+    io.open = orig_open
+  end)
 end

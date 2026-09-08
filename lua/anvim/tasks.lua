@@ -45,7 +45,7 @@ local function validated_flutter_id(id)
   for _, d in ipairs(devs) do
     if d.id == id then return id end
   end
-  alert.warn("Device " .. id .. " tidak ada di `flutter devices` — dicoba, mungkin gagal.")
+  alert.warn("Device " .. id .. " is not in `flutter devices` — trying anyway, may fail.")
   return id
 end
 
@@ -179,7 +179,7 @@ end
 --- env opsional diteruskan ke job (mis. ANDROID_SERIAL untuk gradle).
 local function run_cmd(cmd, label, cwd, on_done, env)
   if M.state.running then
-    alert.warn("Task already running: " .. tostring(M.state.current) .. " (x untuk cancel)")
+    alert.warn("Task already running: " .. tostring(M.state.current) .. " (x to cancel)")
     return
   end
 
@@ -257,7 +257,7 @@ local function run_cmd(cmd, label, cwd, on_done, env)
     if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
     M.state.running = false
     M.state.current = nil
-    alert.error("task", "jobstart gagal untuk " .. table.concat(cmd, " "))
+    alert.error("task", "jobstart failed for " .. table.concat(cmd, " "))
     if on_done then on_done("", false) end
   else
     M.state.job_id = job_id
@@ -276,16 +276,16 @@ function M.run(project, task_name, on_done)
     local cmd = cmd_for(project, task_name)
     if not cmd then
       if project.type == "unknown" then
-        alert.warn("Buka project Android (build.gradle) atau Flutter (pubspec.yaml) dulu.")
+        alert.warn("Open an Android, Flutter, or Node project first.")
       else
-        alert.warn("Task '" .. task_name .. "' gak didukung buat project " .. project.type .. ".")
+        alert.warn("Task '" .. task_name .. "' is not supported for project " .. project.type .. ".")
       end
       if on_done then on_done("", false) end
       return
     end
 
     if vim.fn.executable(cmd[1]) == 0 and not cmd[1]:find("/") then
-      alert.error("task", cmd[1] .. " tidak ditemukan di PATH. Jalankan :AnvimCheck.")
+      alert.error("task", cmd[1] .. " not found in PATH. Run :AnvimCheck.")
       if on_done then on_done("", false) end
       return
     end
@@ -304,7 +304,7 @@ function M.run(project, task_name, on_done)
     if cmd[1]:match("gradlew$") and vim.fn.executable(cmd[1]) ~= 1 then
       pcall(vim.fn.system, "chmod +x " .. util.esc(cmd[1]) .. " 2>/dev/null")
       if vim.fn.executable(cmd[1]) ~= 1 and vim.fn.executable("gradle") == 1 then
-        alert.warn("gradlew tidak executable — pakai gradle PATH.")
+        alert.warn("gradlew not executable — using gradle from PATH.")
         cmd = { "gradle", cmd[2] }
       end
     end
@@ -327,12 +327,12 @@ function M.run_custom(cmd, label, on_done)
   label = label or (type(cmd) == "table" and table.concat(cmd, " ") or "custom")
   local ok, err = pcall(function()
     if type(cmd) ~= "table" or #cmd == 0 or type(cmd[1]) ~= "string" then
-      alert.error("task", "custom cmd tidak valid (harus list string).")
+      alert.error("task", "invalid custom cmd (must be a string list).")
       if on_done then on_done("", false) end
       return
     end
     if vim.fn.executable(cmd[1]) == 0 and not cmd[1]:find("/") then
-      alert.error("task", cmd[1] .. " tidak ditemukan di PATH. Jalankan :AnvimCheck.")
+      alert.error("task", cmd[1] .. " not found in PATH. Run :AnvimCheck.")
       if on_done then on_done("", false) end
       return
     end
@@ -352,7 +352,7 @@ end
 function M.rerun(on_done)
   local last = M.state.last
   if not last then
-    alert.warn("Belum ada task yang dijalankan.")
+    alert.warn("No task has been run yet.")
     return false
   end
   if last.kind == "custom" then
@@ -366,7 +366,7 @@ function M.rerun(on_done)
   end
   local cwd_ok, cwd = pcall(vim.fn.getcwd)
   if cwd_ok and cwd and proj.root and cwd ~= proj.root then
-    alert.warn("Rerun memakai project snapshot " .. tostring(proj.root) .. " (cwd sekarang " .. cwd .. ").")
+    alert.warn("Rerun uses project snapshot " .. tostring(proj.root) .. " (cwd is now " .. cwd .. ").")
   end
   M.run(proj, last.task, on_done)
   return true

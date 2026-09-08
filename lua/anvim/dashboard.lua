@@ -176,6 +176,18 @@ local function first_selectable(items)
   return 1
 end
 
+--- Kunci identitas item agar rebuild (async/sync) tidak menggeser seleksi.
+local function item_key(it)
+  if not it then return nil end
+  if it.type == "task" then return "task:" .. tostring(it.task) end
+  if it.type == "custom" then return "custom:" .. tostring(it.label) end
+  if it.type == "device" then return "device:" .. tostring(it.device and it.device.id) end
+  if it.type == "avd" then return "avd:" .. tostring(it.avd and it.avd.name) end
+  if it.type == "scrcpy" then return "scrcpy:" .. tostring(it.scrcpy and it.scrcpy.id) end
+  if it.type == "health" then return "health:" .. tostring(it.tool) end
+  return it.type .. ":" .. tostring(it.text or it.label or "")
+end
+
 local function center(text, w)
   local dw = vim.fn.strdisplaywidth(text)
   return string.rep(" ", math.floor(math.max(0, w - dw) / 2)) .. text
@@ -285,10 +297,15 @@ local function refresh_state(slow)
   if slow == nil then slow = true end
   local proj = project_m.detect()
   local dev_list = devices_m.list()
-  local tools = { "adb", "java", "git", "flutter", "gradle" }
+  -- toolset mengikuti tipe project (node tak ditagih flutter, dst.);
+  -- user bisa memaksa via health_check.tools = {...}
+  local tools = nil
   local ok_c, c = pcall(function() return require("anvim.config").get() end)
   if ok_c and c and c.health_check and c.health_check.tools then tools = c.health_check.tools end
-  if proj.type == "node" then table.insert(tools, "node") end
+  if not tools and syscheck_m.required_tools then
+    tools = syscheck_m.required_tools(proj.type)
+  end
+  tools = tools or { "adb", "java", "git", "flutter", "gradle" }
   local h_results = syscheck_m.check_all(tools, slow and nil or { deep = false })
   -- AVD info: lambat (spawn emulator binary + adb per device) → fase slow saja
   local avd_info = {}
@@ -348,6 +365,31 @@ local function refresh_state(slow)
   return proj
 end
 
+--- Refresh state sambil mempertahankan item yang sedang dipilih.
+--- Return proj. Bila item hilang (mis. device cabut), fallback selectable pertama.
+local function refresh_keep_selection(slow)
+  local cur = M.state.items and M.state.items[M.state.selected]
+  local key = item_key(cur)
+  local proj
+  if slow == nil then
+    proj = refresh_state()
+  else
+    proj = refresh_state(slow)
+  end
+  if key then
+    for i, it in ipairs(M.state.items) do
+      if item_key(it) == key and is_selectable(it) then
+        M.state.selected = i
+        return proj
+      end
+    end
+  end
+  if not is_selectable(M.state.items[M.state.selected]) then
+    M.state.selected = first_selectable(M.state.items)
+  end
+  return proj
+end
+
 -- ── public API ──
 
 function M.open()
@@ -382,16 +424,14 @@ function M.open()
     M.state.selected = first_selectable(M.state.items)
     render(buf, M.state.items, M.state.selected, proj, devices_m.get_active(), height, width)
     require("anvim.keymaps.dashboard").set(buf)
-    -- fase lambat (emulator/flutter): susulkan tanpa blokir open
+    -- fase lambat (emulator/flutter): susulkan tanpa blokir open,
+    -- seleksi user dipertahankan via identitas item (tidak lompat ke atas)
     local open_buf, open_win = buf, win
     vim.schedule(function()
       if not M.state.open or M.state.buf ~= open_buf or M.state.win ~= open_win then return end
-      local ok2, proj2 = pcall(refresh_state, true)
+      local ok2, proj2 = pcall(refresh_keep_selection, true)
       if not ok2 then return end
       if not M.state.open or M.state.buf ~= open_buf then return end
-      if not is_selectable(M.state.items[M.state.selected]) then
-        M.state.selected = first_selectable(M.state.items)
-      end
       local w2, h2 = current_geom()
       render(open_buf, M.state.items, M.state.selected, proj2, devices_m.get_active(), h2, w2)
     end)
@@ -432,15 +472,15 @@ function M.open()
           end
         end
         if #missing > 0 then
-          alert.warn("Missing: " .. table.concat(missing, ", ") .. " — tekan c untuk install.")
+          alert.warn("Missing: " .. table.concat(missing, ", ") .. " — press c to install.")
         elseif #outdated > 0 then
-          alert.warn("Outdated: " .. table.concat(outdated, ", ") .. " — pertimbangkan upgrade.")
+          alert.warn("Outdated: " .. table.concat(outdated, ", ") .. " — consider upgrading.")
         end
       end
     end)
   end)
   if not ok then
-    alert.error("buka dashboard", err)
+    alert.error("open dashboard", err)
   end
 end
 
@@ -448,12 +488,16 @@ function M.nav(dir)
   local ok, err = pcall(function()
     local total = #M.state.items
     if total == 0 then return end
+    -- bounded: mentok di ujung (tidak wrap) agar seleksi tidak lompat ke atas
     local sel = M.state.selected or 1
+    local nxt = sel
     for _ = 1, total do
-      sel = sel + dir
-      if sel < 1 then sel = total end
-      if sel > total then sel = 1 end
-      if is_selectable(M.state.items[sel]) then break end
+      nxt = nxt + dir
+      if nxt < 1 or nxt > total then break end
+      if is_selectable(M.state.items[nxt]) then
+        sel = nxt
+        break
+      end
     end
     M.state.selected = sel
     local width, height = current_geom()
@@ -509,7 +553,7 @@ end
 
 local function ensure_project(proj)
   if not proj or proj.type == "unknown" then
-    alert.warn("Open Android (build.gradle) or Flutter (pubspec.yaml) project first.")
+    alert.warn("Open an Android, Flutter, or Node project first.")
     return false
   end
   return true
@@ -587,7 +631,7 @@ function M.do_emulator_kill()
   if ok then emu.pick_and_kill() end
   -- refresh agar status kill terlihat
   if M.state.open then
-    refresh_state()
+    refresh_keep_selection()
     local width, height = current_geom()
     render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
   end
@@ -606,7 +650,7 @@ function M.select()
       elseif item.task == "scrcpy" then M.do_scrcpy()
       elseif item.task == "devices" then
         local dl = devices_m.list()
-        refresh_state()
+        refresh_keep_selection()
         local width, height = current_geom()
         render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
         alert.info("Found " .. #dl .. " device(s) — list refreshed")
@@ -624,13 +668,15 @@ function M.select()
       local valid = false
       for _, d in ipairs(all) do if d.id == item.device.id then valid = true break end end
       if not valid then
-        alert.warn("Device " .. item.device.id .. " tidak lagi terhubung — refresh")
-        refresh_state()
+        alert.warn("Device " .. item.device.id .. " is no longer connected — refreshed")
+        refresh_keep_selection()
+        local width0, height0 = current_geom()
+        render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height0, width0)
         return
       end
       devices_m.set_active(item.device.id)
       alert.info("Active: " .. item.device.id)
-      refresh_state()
+      refresh_keep_selection()
       local width, height = current_geom()
       render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
     elseif item.type == "avd" then
@@ -638,7 +684,7 @@ function M.select()
       if a.running_id then
         devices_m.set_active(a.running_id)
         alert.info("Active: " .. a.name .. " (" .. a.running_id .. ")")
-        refresh_state()
+        refresh_keep_selection()
         local width2, height2 = current_geom()
         render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height2, width2)
       else
@@ -655,7 +701,7 @@ function M.select()
         else
           scr.launch(s.id, {})
         end
-        refresh_state()
+        refresh_keep_selection()
         local width3, height3 = current_geom()
         render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height3, width3)
       end

@@ -108,13 +108,13 @@ end
 function M.verify_sha256(zip_path, dl_info, logs)
   local sha_url = dl_info and dl_info.sha256_url or nil
   if not sha_url then
-    table.insert(logs, "⚠ sha256 skipped (no official checksum published) — lanjut install")
+    table.insert(logs, "⚠ sha256 skipped (no official checksum published) — continuing install")
     return true
   end
   table.insert(logs, "Verifying sha256...")
   local remote = fetch_text(sha_url)
   if not remote then
-    table.insert(logs, "⚠ sha256 download gagal — lanjut tanpa verify: " .. sha_url)
+    table.insert(logs, "⚠ sha256 download failed — continuing without verify: " .. sha_url)
     return true
   end
   -- bila checksum file multi-baris (mis. SHA256SUMS.txt), petik baris file kita
@@ -127,7 +127,7 @@ function M.verify_sha256(zip_path, dl_info, logs)
       end
     end
     if not expected then
-      table.insert(logs, "⚠ sha256 untuk " .. dl_info.sha256_file .. " tidak ada — lanjut tanpa verify")
+      table.insert(logs, "⚠ sha256 untuk " .. dl_info.sha256_file .. " not listed — continuing without verify")
       return true
     end
     expected = expected:lower()
@@ -135,12 +135,12 @@ function M.verify_sha256(zip_path, dl_info, logs)
     expected = remote:match("(%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x%x)"):lower()
   end
   if not expected then
-    table.insert(logs, "⚠ sha256 remote tidak valid — lanjut tanpa verify")
+    table.insert(logs, "⚠ sha256 remote invalid — continuing without verify")
     return true
   end
   local actual, err = file_sha256(zip_path)
   if not actual then
-    table.insert(logs, "⚠ sha256 lokal gagal (" .. tostring(err) .. ") — lanjut tanpa verify")
+    table.insert(logs, "⚠ sha256 local failed (" .. tostring(err) .. ") — continuing without verify")
     return true
   end
   if actual ~= expected then
@@ -177,9 +177,9 @@ local function inject_path_to_rc(bin_dir)
     local cmd = "setx PATH \"%PATH%;" .. bin_dir .. "\" 2>&1"
     local ok, out = pcall(vim.fn.system, cmd)
     if ok and out and (out:match("SUCCESS") or out:match("Berhasil")) then
-      return true, "✓ PATH set via setx — buka terminal baru"
+      return true, "✓ PATH set via setx — open a new terminal"
     end
-    return false, "⚠ setx gagal, tambah manual: " .. bin_dir
+    return false, "⚠ setx failed, add manually: " .. bin_dir
   end
 
   local export_posix = 'export PATH="$PATH:' .. bin_dir .. '"'
@@ -218,9 +218,9 @@ local function inject_path_to_rc(bin_dir)
   end
 
   if any_ok then
-    return true, "✓ PATH added (" .. table.concat(notes, ", ") .. ") — terminal baru bisa pakai"
+    return true, "✓ PATH added (" .. table.concat(notes, ", ") .. ") — new terminals can use it"
   end
-  return false, "⚠ Gagal nulis RC, tambah manual: " .. export_posix
+  return false, "⚠ Failed to write RC, add manually: " .. export_posix
 end
 
 --- Deploy kanonis ke ~/.local/bin: symlink dulu (satu sumber truth di
@@ -263,7 +263,7 @@ function M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
     table.insert(lines, "  symlink → " .. bin_path)
   else
     -- ATTEMPT 2: copy fallback
-    table.insert(lines, "  symlink gagal, fallback copy...")
+    table.insert(lines, "  symlink failed, copy fallback...")
     pcall(vim.fn.system, "cp -f " .. util.esc(bin_path) .. " " .. util.esc(link) .. " 2>&1")
     pcall(vim.fn.system, "chmod +x " .. util.esc(link) .. " 2>/dev/null")
   end
@@ -280,7 +280,7 @@ function M.deploy_binary(bin_path, bin_name, tool_subdir, logs)
     return true, lines
   end
 
-  table.insert(lines, "  deploy gagal / belum di PATH")
+  table.insert(lines, "  deploy failed / not in PATH yet")
   local _, log_line = inject_path_to_rc(bin_dir)
   table.insert(lines, "  " .. log_line)
   table.insert(lines, "⚠ manual: ln -s " .. bin_path .. " " .. link)
@@ -412,7 +412,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
       -- PHASE 1b: best-effort sha256 verify (mismatch = gagal, hilang = warning)
       if not M.verify_sha256(zip_path, dl_info, logs) then
         redraw()
-        fail("Checksum verify gagal — file dihapus agar aman", false)
+        fail("Checksum verify failed — file deleted for safety", false)
         pcall(os.remove, zip_path)
         return
       end
@@ -528,7 +528,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
               verified = vim.fn.executable(bin_name) == 1
             end
             if verified and deployed then
-              table.insert(logs, "✓ " .. label .. " siap dipakai!")
+              table.insert(logs, "✓ " .. label .. " ready to use!")
               redraw()
               M.phase = "✓ Install done!"
               stop_timer()
@@ -536,7 +536,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
               M.install_active = false
               vim.defer_fn(function() close_pw(); on_done(true) end, 1500)
             else
-              table.insert(logs, "✗ " .. label .. " gagal verifikasi — lihat log di atas")
+              table.insert(logs, "✗ " .. label .. " verification failed — see log above")
               redraw()
               stop_timer()
               M.install_active = false
@@ -548,7 +548,7 @@ function M.install_tool(name, dl_info, label, bin_name, on_done)
     end,
   })
   if M.job_id == nil or M.job_id <= 0 then
-    fail("jobstart gagal", false)
+    fail("jobstart failed", false)
   end
 end
 
