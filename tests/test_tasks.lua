@@ -149,7 +149,39 @@ return function(ctx)
     local t = require("anvim.tasks")
     t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean")
     assert(t.state.last.task == "clean")
+    assert(t.state.last.project.root == "/tmp/proj", "snapshot root harus tersimpan")
     assert(t.rerun() == true)
+  end)
+
+  run("tasks: rerun pakai snapshot walau cwd pindah", function()
+    setup()
+    local got_cwd
+    mock.raw("fn.jobstart", function(_, opts)
+      got_cwd = opts.cwd
+      if opts and opts.on_exit then opts.on_exit(nil, 0) end
+      return 5
+    end)
+    mock.raw("fn.getcwd", function() return "/tmp/proj" end)
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.run({ type = "flutter", build_tool = "flutter", root = "/tmp/proj" }, "clean")
+    mock.raw("fn.getcwd", function() return "/tmp/lain" end)
+    assert(t.rerun() == true)
+    assert(got_cwd == "/tmp/proj", "rerun harus pakai snapshot root, got " .. tostring(got_cwd))
+  end)
+
+  run("tasks: flutter id tak dikenal warn tapi jalan", function()
+    setup()
+    local warned = false
+    package.loaded["anvim.status-alert"] = { info = function() end,
+      warn = function() warned = true end, error = function() end, ok = function() end }
+    package.loaded["anvim.flutter"] = { list = function() return { { id = "lain" } } end }
+    package.loaded["anvim.devices"] = { get_active = function() return "emulator-5554" end }
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    local cmd = t._cmd_for({ type = "flutter", build_tool = "flutter" }, "run")
+    assert(cmd[4] == "emulator-5554", table.concat(cmd, " "))
+    assert(warned == true, "harus warn namespace beda")
   end)
 
   run("tasks: gradle teruskan ANDROID_SERIAL", function()

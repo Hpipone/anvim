@@ -106,11 +106,9 @@ end
 
 local function setup_keymaps(buf)
   vim.keymap.set("n", "q", function()
-    M.stop()
     M.close_win()
   end, { buffer = buf, nowait = true, silent = true, desc = "Close logcat" })
   vim.keymap.set("n", "<Esc>", function()
-    M.stop()
     M.close_win()
   end, { buffer = buf, nowait = true, silent = true, desc = "Close logcat" })
   for k, _ in pairs(levels) do
@@ -151,8 +149,15 @@ function M.open(filter, tag)
     if M.running then
       if M.win and vim.api.nvim_win_is_valid(M.win) then
         vim.api.nvim_set_current_win(M.win)
+        return
       end
-      return
+      -- job masih hidup tapi window dimatikan paksa → recreate menempel
+      -- ke job yang jalan (history utuh), tanpa spawn job baru
+      if M.job_id then
+        M.win = nil
+      else
+        M.running = false
+      end
     end
 
     local buf = M.buf
@@ -184,6 +189,14 @@ function M.open(filter, tag)
     vim.wo[win].wrap = false
 
     setup_keymaps(buf)
+    if M.job_id then
+      -- recover: tempel ke job yang masih hidup
+      M.running = true
+      M.win = win
+      vim.wo[win].wrap = false
+      alert.info("Logcat reattached (" .. #M.history .. " lines)")
+      return
+    end
     M.running = true
     start_logcat(buf, filter, M.tag)
     if M.running then
@@ -233,6 +246,8 @@ function M.stop()
 end
 
 function M.close_win()
+  -- satu entry point tutup: selalu stop job (anti bocor), buffer+history utuh
+  M.stop()
   if M.win and vim.api.nvim_win_is_valid(M.win) then
     pcall(vim.api.nvim_win_close, M.win, true)
   end

@@ -35,6 +35,10 @@ function M.setup(opts)
   register_cmd("AnvimLogcat", function() require("anvim.logcat").open() end, "Open anvim logcat viewer")
   register_cmd("AnvimRun", function()
     local p = require("anvim.project").detect()
+    if not p or p.type == "unknown" then
+      require("anvim.status-alert").warn("Open Android, Flutter, or Node project first.")
+      return
+    end
     require("anvim.tasks").run(p, "run")
   end, "Run app via anvim")
   register_cmd("AnvimEmulator", function() require("anvim.emulator").pick_and_launch() end, "Launch Android emulator")

@@ -7,7 +7,14 @@ local alert = require("anvim.status-alert")
 local util = require("anvim.util")
 pcall(require, "anvim.theme")
 
-local VERSION = "v1.3.0"
+--- Versi single-source dari config (fallback bila gagal load).
+local function VERSION()
+  local ok, c = pcall(function() return require("anvim.config").get() end)
+  if ok and c and c.version and c.version ~= "" then
+    return "v" .. c.version
+  end
+  return "v?"
+end
 
 local config_m, syscheck_m, project_m, devices_m, tasks_m, emulator_m, flutter_m, scrcpy_m
 
@@ -187,7 +194,7 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     end
 
     add(center("a n v i m", width), "AnvimTitle")
-    add(center("Android / Flutter Toolkit  " .. VERSION, width))
+    add(center("Android / Flutter Toolkit  " .. VERSION(), width))
     add("")
     local info = string.format("Project: %s (%s)  |  Device: %s", proj.name or "?", proj.type or "?", dev_active or "none")
     add(center(info, width))
@@ -358,7 +365,7 @@ function M.open()
     local win = vim.api.nvim_open_win(buf, true, {
       relative = "editor", width = width, height = height,
       col = col, row = row, style = "minimal", border = d.border,
-      title = " anvim " .. VERSION .. " ", title_pos = "center",
+      title = " anvim " .. VERSION() .. " ", title_pos = "center",
     })
 
     pcall(vim.api.nvim_buf_set_name, buf, "anvim://dashboard")
@@ -547,7 +554,12 @@ function M.do_custom(cmd, label)
 end
 
 function M.do_rerun()
-  if tasks_m.rerun and tasks_m.rerun() then
+  M.state.task_before_rerun = tasks_m.state and tasks_m.state.running and tasks_m.state.current or nil
+  if not (tasks_m.rerun and tasks_m.rerun()) then return end
+  -- tutup hanya bila task BARU benar jalan (current berubah/baru muncul);
+  -- bila dispatch ditolak, run() sudah warn dan dashboard tetap terbuka
+  local st = tasks_m.state
+  if st and st.running and st.current ~= M.state.task_before_rerun then
     M.close()
   end
 end

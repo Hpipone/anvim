@@ -41,6 +41,28 @@ local function git_branch(r)
   return nil
 end
 
+local MARKERS = { "pubspec.yaml", "settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts", "package.json" }
+
+--- Cari marker dari start naik sampai stop (inklusif). Return dir atau nil.
+--- Untuk monorepo: marker terdekat dari cwd menang atas git-root.
+local function find_marker_upward(start, stop)
+  local dir = start
+  local guard = 0
+  while dir and dir ~= "" and guard < 32 do
+    guard = guard + 1
+    for _, m in ipairs(MARKERS) do
+      if has_file_abs(join(dir, m)) then return dir end
+    end
+    if dir == stop then break end
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then break end
+    dir = parent
+    -- jangan keluar dari stop: berhenti bila stop bukan ancestor lagi
+    if stop ~= "" and #dir < #stop then break end
+  end
+  return nil
+end
+
 function M.detect()
   local ok, result = pcall(function()
     local r = root()
@@ -57,6 +79,19 @@ function M.detect()
     -- project node/js (npm scripts: dev/build/test) — mis. React Native/Expo/Capacitor
     if has_file_abs(join(r, "package.json")) then return M.detect_node(r) end
     if vim.fn.filereadable("package.json") == 1 then return M.detect_node(vim.fn.getcwd()) end
+    -- monorepo: marker di subdir — jalan ke atas dari cwd sampai root
+    local cwd = vim.fn.getcwd()
+    if cwd ~= r then
+      local hit = find_marker_upward(cwd, r)
+      if hit then
+        if has_file_abs(join(hit, "pubspec.yaml")) then return M.detect_flutter(hit) end
+        if has_file_abs(join(hit, "settings.gradle")) or has_file_abs(join(hit, "settings.gradle.kts"))
+          or has_file_abs(join(hit, "build.gradle")) or has_file_abs(join(hit, "build.gradle.kts")) then
+          return M.detect_android(hit)
+        end
+        if has_file_abs(join(hit, "package.json")) then return M.detect_node(hit) end
+      end
+    end
     return nil
   end)
   if not ok then

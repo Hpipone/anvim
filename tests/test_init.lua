@@ -40,7 +40,8 @@ return function(ctx)
 
   run("init: register AnvimTest + AnvimCustom", function()
     local cmds = {}
-    mock.raw("api.nvim_create_user_command", function(name) table.insert(cmds, name) end)
+    local fns = {}
+    mock.raw("api.nvim_create_user_command", function(name, fn) table.insert(cmds, name) fns[name] = fn end)
     mock.raw("keymap.set", function() end)
     vim.g.anvim_loaded = nil
     vim.g.anvim_no_default_keymaps = true
@@ -60,6 +61,26 @@ return function(ctx)
     assert(has("AnvimDoctor"), "AnvimDoctor hilang")
     assert(has("AnvimLogcatSave"), "AnvimLogcatSave hilang")
     assert(has("AnvimHelp"), "AnvimHelp hilang")
+    vim.g.anvim_no_default_keymaps = nil
+  end)
+
+  run("init: AnvimRun guard unknown", function()
+    local cmds = {}
+    local fns = {}
+    mock.raw("api.nvim_create_user_command", function(name, fn) table.insert(cmds, name) fns[name] = fn end)
+    mock.raw("keymap.set", function() end)
+    vim.g.anvim_loaded = nil
+    vim.g.anvim_no_default_keymaps = true
+    local warned, ran = false, false
+    package.loaded["anvim.status-alert"] = { info = function() end,
+      warn = function() warned = true end, error = function() end, ok = function() end }
+    package.loaded["anvim.project"] = { detect = function() return { type = "unknown" } end }
+    package.loaded["anvim.tasks"] = { run = function() ran = true end }
+    package.loaded["anvim.init"] = nil
+    require("anvim.init").setup({})
+    fns["AnvimRun"]()
+    assert(warned == true, "unknown harus warn")
+    assert(ran == false, "run tidak boleh jalan")
     vim.g.anvim_no_default_keymaps = nil
   end)
 end

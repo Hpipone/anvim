@@ -123,6 +123,17 @@ return function(ctx)
     assert(n == 1, "harus 1 spawn, got " .. n)
   end)
 
+  run("emulator: cancel_wait hentikan wait", function()
+    setup()
+    package.loaded["anvim.emulator"] = nil
+    package.loaded["anvim.util"] = nil
+    local emu = require("anvim.emulator")
+    emu.wait_boot("emulator-5554", 60000, function() end)
+    assert(emu.cancel_wait("boot:emulator-5554") == true, "wait harus bisa di-cancel")
+    assert(emu.cancel_wait("boot:emulator-5554") == false, "kedua kali tidak ada")
+    assert(next(emu._timers) == nil, "tidak boleh ada timer bocor")
+  end)
+
   run("emulator: kill tanpa id gagal", function()
     setup()
     package.loaded["anvim.emulator"] = nil

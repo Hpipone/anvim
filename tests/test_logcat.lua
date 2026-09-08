@@ -159,4 +159,31 @@ return function(ctx)
     lc.history = {}
     assert(lc.save("/tmp/x.log") == nil)
   end)
+
+  run("logcat: open recreate window bila job hidup", function()
+    local spawned = 0
+    mock.raw("fn.jobstart", function() spawned = spawned + 1 return 1 end)
+    mock.raw("api.nvim_win_is_valid", function(w) return w ~= "dead" end)
+    lc.running = true
+    lc.job_id = 7
+    lc.buf = "logbuf_1"
+    lc.win = "dead"
+    lc.history = { "h1" }
+    lc.open("I")
+    assert(spawned == 0, "job lama dipakai, jangan spawn baru")
+    assert(lc.running == true)
+    assert(lc.win ~= nil and lc.win ~= "dead", "window baru harus dibuat")
+  end)
+
+  run("logcat: close_win stop job (unified)", function()
+    lc.running = true
+    lc.job_id = 9
+    lc.win = "logwin_1"
+    local stopped = false
+    mock.raw("fn.jobstop", function(id) stopped = (id == 9) end)
+    mock.raw("api.nvim_win_is_valid", function() return true end)
+    lc.close_win()
+    assert(stopped == true, "close harus stop job")
+    assert(lc.running == false and lc.job_id == nil)
+  end)
 end

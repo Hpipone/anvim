@@ -70,4 +70,25 @@ return function(ctx)
     assert(r.scripts.dev == "expo start" and r.scripts.build == "expo build")
     io.open = orig_open
   end)
+
+  run("project: monorepo walk-up temukan marker subdir", function()
+    mock.raw("fn.getcwd", function() return "/tmp/repo/app/mobile/deep" end)
+    mock.raw("fn.system", function(cmd)
+      cmd = tostring(cmd)
+      if cmd:find("rev%-parse") and cmd:find("show%-toplevel") then return "/tmp/repo\n" end
+      if cmd:find("abbrev%-ref") then return "main\n" end
+      return ""
+    end)
+    mock.raw("fn.filereadable", function(name)
+      if tostring(name) == "/tmp/repo/app/mobile/pubspec.yaml" then return 1 end
+      return 0
+    end)
+    mock.raw("fn.isdirectory", function() return 1 end)
+    package.loaded["anvim.project"] = nil
+    package.loaded["anvim.util"] = nil
+    local p = require("anvim.project")
+    local r = p.detect()
+    assert(r.type == "flutter", "got " .. tostring(r.type))
+    assert(r.root == "/tmp/repo/app/mobile", "got " .. tostring(r.root))
+  end)
 end

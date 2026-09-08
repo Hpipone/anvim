@@ -122,25 +122,65 @@ function M._boot_done(out)
   return out and vim.trim(out):sub(1, 1) == "1" or false
 end
 
+M._timers = {} -- key -> uv timer (bisa di-cancel)
+
+local function track_timer(key, timer)
+  M.cancel_wait(key)
+  M._timers[key] = timer
+end
+
+local function untrack_timer(key, timer)
+  if M._timers[key] == timer then M._timers[key] = nil end
+  if timer then
+    pcall(function() timer:stop() end)
+    pcall(function() timer:close() end)
+  end
+end
+
+--- Batalkan wait (boot/new-device) berdasarkan key. Return true bila ada.
+function M.cancel_wait(key)
+  local t = M._timers[key]
+  M._timers[key] = nil
+  if t then
+    pcall(function() t:stop() end)
+    pcall(function() t:close() end)
+    return true
+  end
+  return false
+end
+
+--- Batalkan semua wait emulator.
+function M.cancel_all_waits()
+  for key in pairs(M._timers) do M.cancel_wait(key) end
+end
+
 --- Poll boot_completed sampai 1 / timeout. on_done(true/false).
 function M.wait_boot(device_id, timeout_ms, on_done)
   on_done = on_done or function() end
   timeout_ms = timeout_ms or cfg_boot_timeout()
   if not device_id then on_done(false) return end
+  M.cancel_wait("boot:" .. device_id)
   local start = vim.uv.now()
   local timer = vim.uv.new_timer()
+  track_timer("boot:" .. device_id, timer)
+  local done = false
+  local function finish(ok)
+    if done then return end
+    done = true
+    untrack_timer("boot:" .. device_id, timer)
+    on_done(ok)
+  end
   local function poll()
+    if M._timers["boot:" .. device_id] ~= timer then return end -- di-cancel
     if vim.uv.now() - start > timeout_ms then
-      if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
       alert.warn("Emulator boot timeout (" .. math.floor(timeout_ms / 1000) .. "s) — cek manual via adb devices.")
-      on_done(false)
+      finish(false)
       return
     end
     local ok, out = pcall(vim.fn.system, "adb -s " .. util.esc(device_id) .. " shell getprop sys.boot_completed 2>/dev/null")
     if ok and M._boot_done(out) then
-      if timer then pcall(function() timer:stop() end) pcall(function() timer:close() end) end
       alert.ok("Emulator booted: " .. device_id)
-      on_done(true)
+      finish(true)
       return
     end
   end
@@ -149,11 +189,16 @@ end
 
 --- Cari device emulator baru yang muncul setelah launch (poll adb devices).
 local function wait_new_emulator(known_ids, timeout_ms, on_done)
+  M.cancel_wait("new")
   local start = vim.uv.now()
   local timer = vim.uv.new_timer()
+  track_timer("new", timer)
+  local done = false
   timer:start(0, 2000, vim.schedule_wrap(function()
+    if done or M._timers["new"] ~= timer then return end
     if vim.uv.now() - start > timeout_ms then
-      pcall(function() timer:stop() end) pcall(function() timer:close() end)
+      done = true
+      untrack_timer("new", timer)
       on_done(nil)
       return
     end
@@ -162,7 +207,8 @@ local function wait_new_emulator(known_ids, timeout_ms, on_done)
       local list = dev.list()
       for _, d in ipairs(list) do
         if d.id:match("^emulator%-") and not known_ids[d.id] then
-          pcall(function() timer:stop() end) pcall(function() timer:close() end)
+          done = true
+          untrack_timer("new", timer)
           on_done(d.id)
           return
         end
@@ -184,6 +230,8 @@ function M.launch(avd, opts, on_done)
   end
   local cmd = M.build_launch_cmd(avd, opts)
   alert.info("Launching emulator: " .. avd .. (opts.wipe_data and " (wipe-data)" or ""))
+  -- launch baru membatalkan wait lama (hindari on_done ganda)
+  M.cancel_all_waits()
   -- snapshot device yang sudah ada agar bisa deteksi yang baru muncul
   local known = {}
   pcall(function()
@@ -221,6 +269,8 @@ function M.kill(device_id, on_done)
   on_done = on_done or function() end
   if not device_id or device_id == "" then alert.warn("Pilih emulator dulu.") on_done(false) return end
   if vim.fn.executable("adb") == 0 then alert.warn("Butuh ADB.") on_done(false) return end
+  M.cancel_wait("boot:" .. device_id)
+  M.cancel_wait("new")
   alert.info("Killing emulator: " .. device_id)
   local ok, out = pcall(vim.fn.system, "adb -s " .. util.esc(device_id) .. " emu kill 2>&1")
   if not ok then

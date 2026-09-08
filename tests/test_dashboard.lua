@@ -291,13 +291,29 @@ return function(ctx)
   end)
 
   run("dashboard: do_rerun closes on success", function()
-    package.loaded["anvim.tasks"] = { run = function() end, stop = function() end, run_custom = function() end, rerun = function() return true end }
+    local fake = { running = false, current = nil }
+    package.loaded["anvim.tasks"] = { run = function() end, stop = function() end, run_custom = function() end,
+      state = fake,
+      rerun = function() fake.running = true fake.current = "clean" return true end }
     package.loaded["anvim.dashboard"] = nil
     dash = require("anvim.dashboard")
     dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
     dash.open()
     dash.do_rerun()
     assert(dash.state.open == false)
+  end)
+
+  run("dashboard: do_rerun stays open when rejected", function()
+    local fake = { running = true, current = "run" }
+    package.loaded["anvim.tasks"] = { run = function() end, stop = function() end, run_custom = function() end,
+      state = fake,
+      rerun = function() return true end }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    dash.do_rerun()
+    assert(dash.state.open == true, "dashboard harus tetap buka")
   end)
 
   run("dashboard: scrcpy gantikan emulator bila ada", function()
@@ -473,6 +489,29 @@ return function(ctx)
       if it.type == "task" and it.task == "run" and it.label:find("npm") then label_ok = true end
     end
     assert(label_ok == true, "label run harus npm")
+    dash.close()
+  end)
+
+  run("dashboard: versi dari config single-source", function()
+    package.loaded["anvim.config"] = {
+      get = function()
+        return {
+          version = "9.9.9",
+          dashboard = { width = 0.8, height = 0.8, border = "rounded", winblend = 10, min_width = 50, min_height = 14 },
+          health_check = { tools = {}, auto = false },
+          tasks = { custom = {} },
+        }
+      end,
+    }
+    local shown = {}
+    mock.raw("api.nvim_buf_set_lines", function(_, _, _, _, lines)
+      for _, l in ipairs(lines or {}) do table.insert(shown, l) end
+    end)
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    assert(table.concat(shown, "\n"):find("v9.9.9", 1, true), "versi config harus tampil")
     dash.close()
   end)
 end

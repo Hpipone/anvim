@@ -69,3 +69,13 @@
 - [x] Deep search (`find` folder custom) hanya pasca-dashboard/saat check (`deep=false` fase cepat)
 - [x] Tests 126 pass (17 suites)
 
+## Fase 8 — tech-debt cleanup (DONE, v1.3.1)
+- [x] Statusline cache + invalidate DirChanged/BufEnter
+- [x] Flutter namespace: validasi adb id ke flutter.list, warn + fallback
+- [x] Emulator timer handles + cancel (relaunch/kill)
+- [x] Version single-source (dashboard ← config)
+- [x] AnvimRun guard unknown; do_rerun jujur; rerun snapshot root
+- [x] Logcat auto-recover + close_win unification
+- [x] Monorepo walk-up (marker terdekat cwd → git root)
+- [x] Tests 136 pass (17 suites)
+

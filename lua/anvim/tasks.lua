@@ -20,6 +20,35 @@ local function device_prefix()
   return {}
 end
 
+--- Snapshot ringan project untuk rerun (stabil walau user pindah dir).
+local function snapshot_project(project)
+  if type(project) ~= "table" then return nil end
+  return {
+    type = project.type,
+    name = project.name,
+    root = project.root,
+    branch = project.branch,
+    build_tool = project.build_tool,
+    package = project.package,
+    version = project.version,
+    scripts = project.scripts,
+  }
+end
+
+--- adb id belum tentu dikenal flutter (namespace beda). Validasi silang:
+--- tak dikenal → warn + tetap jalan (biar error flutter yang bicara).
+local function validated_flutter_id(id)
+  local ok, fl = pcall(require, "anvim.flutter")
+  if not ok or not fl.list then return id end
+  local ok2, devs = pcall(fl.list)
+  if not ok2 or not devs then return id end
+  for _, d in ipairs(devs) do
+    if d.id == id then return id end
+  end
+  alert.warn("Device " .. id .. " tidak ada di `flutter devices` — dicoba, mungkin gagal.")
+  return id
+end
+
 local function cmd_for(project, task_name)
   local t = project.type
   local bt = project.build_tool
@@ -35,8 +64,8 @@ local function cmd_for(project, task_name)
       local pre = device_prefix()
       local c = { "flutter", "run" }
       for _, a in ipairs(pre) do table.insert(c, 2, a) end
-      -- flutter run -d <id>: prefix adalah -s? flutter pakai -d. koreksi:
-      if #pre == 2 then return { "flutter", "run", "-d", pre[2] } end
+      -- flutter pakai -d (namespace bisa beda dari adb id → validasi silang)
+      if #pre == 2 then return { "flutter", "run", "-d", validated_flutter_id(pre[2]) } end
       return c
     end
     if bt then
@@ -279,7 +308,11 @@ function M.run(project, task_name, on_done)
         cmd = { "gradle", cmd[2] }
       end
     end
-    M.state.last = { kind = "named", task = task_name }
+    M.state.last = {
+      kind = "named",
+      task = task_name,
+      project = snapshot_project(project),
+    }
     run_cmd(cmd, task_name, cwd, on_done, env)
   end)
   if not ok then
@@ -313,7 +346,9 @@ function M.run_custom(cmd, label, on_done)
   end
 end
 
---- Ulangi task terakhir (named maupun custom). Return false jika belum ada.
+--- Ulangi task terakhir (named maupun custom) memakai snapshot saat run.
+--- Named tidak re-detect agar root stabil; warn bila cwd sudah pindah.
+--- Return false jika belum ada / tidak bisa jalan.
 function M.rerun(on_done)
   local last = M.state.last
   if not last then
@@ -324,10 +359,14 @@ function M.rerun(on_done)
     M.run_custom(last.cmd, last.label, on_done)
     return true
   end
-  local ok, proj = pcall(function() return require("anvim.project").detect() end)
-  if not ok or not proj or proj.type == "unknown" then
-    alert.warn("Open Android or Flutter project first.")
+  local proj = last.project
+  if not proj or proj.type == "unknown" then
+    alert.warn("Open Android, Flutter, or Node project first.")
     return false
+  end
+  local cwd_ok, cwd = pcall(vim.fn.getcwd)
+  if cwd_ok and cwd and proj.root and cwd ~= proj.root then
+    alert.warn("Rerun memakai project snapshot " .. tostring(proj.root) .. " (cwd sekarang " .. cwd .. ").")
   end
   M.run(proj, last.task, on_done)
   return true
