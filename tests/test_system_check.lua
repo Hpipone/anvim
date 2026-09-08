@@ -230,4 +230,25 @@ return function(ctx)
     local an = sc.required_tools("android")
     assert(has(an, "java") and has(an, "gradle") and not has(an, "flutter"))
   end)
+
+  run("system_check: adb_bin absolut + cache", function()
+    setup()
+    mock.raw("fn.exepath", function(name)
+      if name == "adb" then return "/sdk/platform-tools/adb" end
+      return ""
+    end)
+    mock.raw("fn.executable", function(p)
+      if tostring(p) == "/sdk/platform-tools/adb" then return 1 end
+      return 0
+    end)
+    mock.raw("fn.glob", function() return {} end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    local sc = require("anvim.system_check")
+    assert(sc.adb_bin() == "/sdk/platform-tools/adb", "got " .. tostring(sc.adb_bin()))
+    mock.raw("fn.exepath", function() return "" end)
+    assert(sc.adb_bin() == "/sdk/platform-tools/adb", "cache harus dipakai")
+    sc.reset_cache()
+    assert(sc.adb_bin() == nil, "reset harus kosongkan")
+  end)
 end

@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.6.1** — Stable (pair robust, logcat back to dashboard)
+> **v1.6.2** — Stable (pair robust, logcat back to dashboard)
 
 ## Features
 
@@ -21,6 +21,10 @@
 ## Requirements
 
 Neovim >= 0.9. Run `:AnvimCheck` to detect and install the rest.
+
+> adb works in terminal but not in anvim? Your Neovim was likely launched
+> without shell PATH (GUI/launcher). Launch nvim from a terminal, or run
+> `:AnvimDoctor` to see what Neovim resolves.
 
 ## Install (lazy.nvim)
 
@@ -99,7 +103,7 @@ Custom tasks appear in the dashboard (★). No line highlights at all — cursor
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 156 unit tests, no framework
+nvim --headless -l tests/run.lua   # 159 unit tests, no framework
 ```
 
 ## Roadmap

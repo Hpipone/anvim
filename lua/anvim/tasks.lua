@@ -119,7 +119,12 @@ local function cmd_for(project, task_name)
     return nil
   end
   if task_name == "devices" then
-    return { "adb", "devices", "-l" }
+    local adb_bin = "adb"
+    pcall(function()
+      local p = require("anvim.system_check").adb_bin()
+      if p and p ~= "" then adb_bin = p end
+    end)
+    return { adb_bin, "devices", "-l" }
   end
   return nil
 end

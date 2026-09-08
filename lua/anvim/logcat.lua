@@ -24,7 +24,12 @@ local function cfg_logcat()
 end
 
 local function build_cmd(filter, tag)
-  local cmd = { "adb" }
+  local adb_bin = "adb"
+  pcall(function()
+    local p = require("anvim.system_check").adb_bin()
+    if p and p ~= "" then adb_bin = p end
+  end)
+  local cmd = { adb_bin }
   local ok, dev = pcall(require, "anvim.devices")
   if ok and dev and dev.get_active then
     local id = dev.get_active()
@@ -50,7 +55,9 @@ local function trim_history()
 end
 
 local function start_logcat(buf, filter, tag)
-  if vim.fn.executable("adb") == 0 then
+  local has_adb = false
+  pcall(function() has_adb = require("anvim.system_check").adb_bin() ~= nil end)
+  if not has_adb and vim.fn.executable("adb") == 0 then
     M.running = false
     return
   end
@@ -135,8 +142,10 @@ end
 
 function M.open(filter, tag)
   local ok, err = pcall(function()
-    if vim.fn.executable("adb") == 0 then
-      alert.warn("Logcat needs ADB.\nRun :AnvimCheck to install.")
+    local has_adb = false
+    pcall(function() has_adb = require("anvim.system_check").adb_bin() ~= nil end)
+    if not has_adb and vim.fn.executable("adb") == 0 then
+      alert.warn("ADB not found in Neovim PATH.\nLaunch nvim from terminal or run :AnvimCheck.")
       return
     end
 

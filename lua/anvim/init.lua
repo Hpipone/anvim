@@ -27,6 +27,18 @@ function M.setup(opts)
   end
   require("anvim.config").setup(opts)
 
+  -- Tanam dir adb ke PATH session: Neovim GUI/launcher sering tanpa PATH
+  -- shell sehingga "adb" tak ketemu di terminal-jobs. Sekali saat setup.
+  pcall(function()
+    local adb = require("anvim.system_check").adb_bin()
+    if adb then
+      local dir = vim.fn.fnamemodify(adb, ":h")
+      if dir ~= "" and not (vim.env.PATH or ""):find(dir, 1, true) then
+        vim.env.PATH = dir .. ":" .. (vim.env.PATH or "")
+      end
+    end
+  end)
+
   if vim.g.anvim_loaded then return end
   vim.g.anvim_loaded = 1
 

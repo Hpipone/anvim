@@ -191,6 +191,10 @@ function M.get_tools_spec()
   return TOOLS
 end
 
+function M.reset_cache()
+  M._adb_cache = nil
+end
+
 --- Hasil cek terakhir (tanpa spawn). Dipakai dashboard agar buka instan;
 --- scan sungguhan hanya saat user trigger (:AnvimCheck / c).
 function M.last_results()
@@ -304,6 +308,21 @@ local function find_tool(name, deep)
   return { found = false, path = nil }
 end
 
+--- Path absolut adb (SDK/ANDROID_HOME/local/bin/PATH/folder custom).
+--- Jangan pakai "adb" mentah: PATH Neovim (GUI/launcher) sering beda
+--- dengan terminal. Cache per session; reset tiap check_all.
+M._adb_cache = nil
+
+function M.adb_bin()
+  if M._adb_cache ~= nil then
+    return M._adb_cache or nil
+  end
+  local r = find_tool("adb")
+  local path = (r and r.path and r.path ~= "") and r.path or nil
+  M._adb_cache = path or false
+  return path
+end
+
 -- ── parse versi: "openjdk 17.0.9" / "Gradle 9.7.1" / "Bridge version 1.0.41"
 --    / "Flutter 3.47.0" / "git version 2.43.0" → {17,0,9}
 function M._parse_version(name, text)
@@ -395,6 +414,7 @@ end
 
 function M.check_all(only, opts)
   M.results = {}
+  M.reset_cache()
   if not only then
     local ok, c = pcall(function() return require("anvim.config").get() end)
     if ok and c and c.health_check and c.health_check.tools then
@@ -479,6 +499,14 @@ function M.get_env_issues()
       hint = "Android Studio → SDK Manager → SDK Tools → Android Emulator.",
     })
   end
+  -- adb ketemu di terminal tapi tidak di Neovim = PATH beda (GUI/launcher)
+  local adb_path = M.adb_bin()
+  if not adb_path and vim.fn.executable("adb") == 0 then
+    table.insert(issues, {
+      label = "adb not visible to Neovim (works in terminal?)",
+      hint = "Launch nvim from terminal, or run :AnvimCheck to install adb.",
+    })
+  end
   return issues
 end
 
@@ -487,6 +515,7 @@ function M.doctor()
   local lines = { "OS: " .. OS:upper() .. "  Arch: " .. ARCH }
   local ah = vim.env.ANDROID_HOME or vim.env.ANDROID_SDK_ROOT or "(unset)"
   table.insert(lines, "ANDROID_HOME: " .. ah)
+  table.insert(lines, "adb (nvim): " .. (M.adb_bin() or "NOT FOUND"))
   table.insert(lines, "")
   local issues = M.get_env_issues()
   if #issues == 0 then

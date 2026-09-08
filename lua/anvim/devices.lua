@@ -3,6 +3,17 @@
 local M = {}
 local alert = require("anvim.status-alert")
 
+--- adb absolut (bukan "adb" mentah — PATH nvim bisa beda dari terminal).
+local function adb()
+  local ok, sys = pcall(require, "anvim.system_check")
+  if ok and sys.adb_bin then
+    local p = sys.adb_bin()
+    if p and p ~= "" then return p end
+  end
+  if vim.fn.executable("adb") == 1 then return "adb" end
+  return nil
+end
+
 M.state = {
   active = nil,
   list = {},
@@ -61,12 +72,13 @@ end
 M._parse = parse_devices
 
 function M.list()
-  if vim.fn.executable("adb") == 0 then
+  local adb_bin = adb()
+  if not adb_bin then
     M.state.list = {}
     return {}
   end
 
-  local ok, out = pcall(vim.fn.system, "adb devices -l 2>/dev/null")
+  local ok, out = pcall(vim.fn.system, require("anvim.util").esc(adb_bin) .. " devices -l 2>/dev/null")
   if not ok or not out then
     alert.debug("devices", "adb devices failed — " .. tostring(out))
     M.state.list = {}
@@ -166,12 +178,13 @@ local HOST_ONLY = { pair = true, connect = true, disconnect = true, devices = tr
 function M.adb_exec(argv, opts, on_done)
   opts = opts or {}
   on_done = on_done or function() end
-  if vim.fn.executable("adb") == 0 then
-    alert.warn("ADB required. Run :AnvimCheck to install.")
+  local adb_bin = adb()
+  if not adb_bin then
+    alert.warn("ADB not found in Neovim PATH. Launch nvim from terminal or run :AnvimCheck.")
     on_done(false)
     return
   end
-  local cmd = { "adb" }
+  local cmd = { adb_bin }
   local active = M.get_active()
   if opts.device ~= false and active and active ~= "" and not HOST_ONLY[argv[1]] then
     vim.list_extend(cmd, { "-s", active })
@@ -200,8 +213,9 @@ end
 --- Alur: start pair → tunggu prompt kode → input user → chansend → done.
 function M.adb_pair(target, on_done)
   on_done = on_done or function() end
-  if vim.fn.executable("adb") == 0 then
-    alert.warn("ADB required. Run :AnvimCheck to install.")
+  local adb_bin = adb()
+  if not adb_bin then
+    alert.warn("ADB not found in Neovim PATH. Launch nvim from terminal or run :AnvimCheck.")
     on_done(false)
     return
   end
@@ -238,7 +252,7 @@ function M.adb_pair(target, on_done)
       end
     end)
   end
-  local job = vim.fn.jobstart({ "adb", "pair", target }, {
+  local job = vim.fn.jobstart({ adb_bin, "pair", target }, {
     stdout_buffered = false,
     stderr_buffered = false,
     on_stdout = function(_, data)
@@ -278,8 +292,8 @@ end
 --- Toggle: pilih command adb → isi argumen → jalan. on_done diteruskan.
 function M.adb_pick(on_done)
   on_done = on_done or function() end
-  if vim.fn.executable("adb") == 0 then
-    alert.warn("ADB required. Run :AnvimCheck to install.")
+  if not adb() then
+    alert.warn("ADB not found in Neovim PATH. Launch nvim from terminal or run :AnvimCheck.")
     on_done(false)
     return
   end

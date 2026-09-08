@@ -71,13 +71,25 @@ function M.list_avds()
   return names
 end
 
+--- adb absolut (PATH nvim bisa beda dari terminal). nil bila tak ketemu.
+local function adb()
+  local ok, sys = pcall(require, "anvim.system_check")
+  if ok and sys.adb_bin then
+    local p = sys.adb_bin()
+    if p and p ~= "" then return p end
+  end
+  if vim.fn.executable("adb") == 1 then return "adb" end
+  return nil
+end
+
 --- Map AVD name → device id untuk emulator yang sedang jalan.
---- Query `adb -s <id> emu avd name` per device emulator-* (cache 10 detik).
+--- Query per device emulator-* (cache 10 detik).
 M._rmap_cache = { at = nil, key = "", map = {} }
 
 function M.running_map(dev_list)
   local map = {}
-  if vim.fn.executable("adb") == 0 then return map end
+  local adb_bin = adb()
+  if not adb_bin then return map end
   dev_list = dev_list or {}
   local key_parts = {}
   for _, d in ipairs(dev_list) do table.insert(key_parts, d.id .. "=" .. d.status) end
@@ -88,7 +100,7 @@ function M.running_map(dev_list)
   end
   for _, d in ipairs(dev_list) do
     if d.id:match("^emulator%-") and d.status == "device" then
-      local ok, out = pcall(vim.fn.system, "adb -s " .. util.esc(d.id) .. " emu avd name 2>/dev/null")
+      local ok, out = pcall(vim.fn.system, util.esc(adb_bin) .. " -s " .. util.esc(d.id) .. " emu avd name 2>/dev/null")
       if ok and out then
         local name = vim.trim(out):gmatch("[^\r\n]+")()
         if name and name ~= "" and name ~= "OK" then
@@ -177,7 +189,12 @@ function M.wait_boot(device_id, timeout_ms, on_done)
       finish(false)
       return
     end
-    local ok, out = pcall(vim.fn.system, "adb -s " .. util.esc(device_id) .. " shell getprop sys.boot_completed 2>/dev/null")
+    local adb_bin = adb()
+    if not adb_bin then
+      finish(false)
+      return
+    end
+    local ok, out = pcall(vim.fn.system, util.esc(adb_bin) .. " -s " .. util.esc(device_id) .. " shell getprop sys.boot_completed 2>/dev/null")
     if ok and M._boot_done(out) then
       alert.ok("Emulator booted: " .. device_id)
       finish(true)
@@ -268,11 +285,12 @@ end
 function M.kill(device_id, on_done)
   on_done = on_done or function() end
   if not device_id or device_id == "" then alert.warn("Select an emulator first.") on_done(false) return end
-  if vim.fn.executable("adb") == 0 then alert.warn("ADB required.") on_done(false) return end
+  local adb_bin = adb()
+  if not adb_bin then alert.warn("ADB not found in Neovim PATH. Launch nvim from terminal or run :AnvimCheck.") on_done(false) return end
   M.cancel_wait("boot:" .. device_id)
   M.cancel_wait("new")
   alert.info("Killing emulator: " .. device_id)
-  local ok, out = pcall(vim.fn.system, "adb -s " .. util.esc(device_id) .. " emu kill 2>&1")
+  local ok, out = pcall(vim.fn.system, util.esc(adb_bin) .. " -s " .. util.esc(device_id) .. " emu kill 2>&1")
   if not ok then
     alert.error("emulator", "kill failed: " .. tostring(out))
     on_done(false)

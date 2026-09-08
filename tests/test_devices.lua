@@ -123,7 +123,7 @@ return function(ctx)
     d.list()
     d.set_active("emulator-5554")
     d.adb_exec({ "shell", "getprop" }, {}, function() end)
-    assert(got[1] == "adb" and got[2] == "-s" and got[3] == "emulator-5554" and got[4] == "shell",
+    assert(got[1]:find("adb", 1, true) and got[2] == "-s" and got[3] == "emulator-5554" and got[4] == "shell",
       table.concat(got, " "))
   end)
 
@@ -169,7 +169,7 @@ return function(ctx)
     package.loaded["anvim.devices"] = nil
     local d = require("anvim.devices")
     d.adb_pick(function() end)
-    assert(got[1] == "adb" and got[2] == "shell", table.concat(got, " "))
+    assert(got[1]:find("adb", 1, true) and got[2] == "shell", table.concat(got, " "))
   end)
 
   run("devices: adb pair kirim kode via chansend", function()

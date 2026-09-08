@@ -115,3 +115,9 @@
 - [x] adb pair: akumulasi stdout+stderr, prompt sekali, timeout 120s
 - [x] Logcat keluar selalu kembali ke dashboard (opsi dihapus)
 - [x] Tests 156 pass (17 suites)
+
+## Fase 15 — adb absolut, bukan PATH (DONE, v1.6.2)
+- [x] system_check.adb_bin() absolut + cache; setup tanam dir adb ke PATH
+- [x] Semua call-site adb absolut (devices/logcat/emulator/tasks/do_logcat)
+- [x] Doctor: baris adb (nvim) + issue PATH beda terminal
+- [x] Tests 159 pass (17 suites)

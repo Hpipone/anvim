@@ -66,7 +66,8 @@ return function(ctx)
     package.loaded["anvim.logcat"] = nil
     lc = require("anvim.logcat")
     local cmd = lc._build_cmd("I")
-    assert(cmd[1] == "adb" and cmd[2] == "-s" and cmd[3] == "emulator-5554", "got " .. table.concat(cmd, " "))
+    assert(cmd[2] == "-s" and cmd[3] == "emulator-5554", "got " .. table.concat(cmd, " "))
+    assert(cmd[1]:find("adb", 1, true), "adb absolut, got " .. tostring(cmd[1]))
     package.loaded["anvim.devices"] = { get_active = function() return nil end }
     package.loaded["anvim.logcat"] = nil
     lc = require("anvim.logcat")
@@ -82,6 +83,12 @@ return function(ctx)
 
   run("logcat: open warns if adb missing", function()
     mock.raw("fn.executable", function() return 0 end)
+    mock.raw("fn.exepath", function() return "" end)
+    mock.raw("fn.glob", function() return {} end)
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    package.loaded["anvim.logcat"] = nil
+    lc = require("anvim.logcat")
     alert_state.warn_called = false
     lc.running = false; lc.buf = nil; lc.win = nil
     lc.open("I")

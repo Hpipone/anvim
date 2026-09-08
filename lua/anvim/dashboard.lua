@@ -523,7 +523,11 @@ function M.bottom()
 end
 
 local function ensure_tool(name, msg)
-  if vim.fn.executable(name) == 0 then
+  local found = vim.fn.executable(name) == 1
+  if not found and name == "adb" then
+    pcall(function() found = require("anvim.system_check").adb_bin() ~= nil end)
+  end
+  if not found then
     alert.warn(msg or ("Need " .. name .. ".\nRun :AnvimCheck to install."))
     return false
   end

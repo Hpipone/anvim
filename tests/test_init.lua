@@ -83,4 +83,28 @@ return function(ctx)
     assert(ran == false, "run tidak boleh jalan")
     vim.g.anvim_no_default_keymaps = nil
   end)
+
+  run("init: setup tanam dir adb ke PATH", function()
+    mock.raw("api.nvim_create_user_command", function() end)
+    mock.raw("keymap.set", function() end)
+    mock.raw("fn.exepath", function(name)
+      if name == "adb" then return "/sdk/platform-tools/adb" end
+      return ""
+    end)
+    mock.raw("fn.executable", function(p)
+      if tostring(p):find("platform%-tools/adb") then return 1 end
+      return 0
+    end)
+    mock.raw("fn.expand", function(s) return s end)
+    mock.raw("fn.glob", function() return {} end)
+    mock.raw("env.PATH", "/usr/bin:/bin")
+    vim.g.anvim_loaded = nil
+    vim.g.anvim_no_default_keymaps = true
+    package.loaded["anvim.init"] = nil
+    package.loaded["anvim.system_check"] = nil
+    package.loaded["anvim.util"] = nil
+    require("anvim.init").setup({})
+    assert(vim.env.PATH:find("/sdk/platform-tools", 1, true), "dir adb harus di PATH: " .. vim.env.PATH)
+    vim.g.anvim_no_default_keymaps = nil
+  end)
 end

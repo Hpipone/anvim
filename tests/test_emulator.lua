@@ -144,6 +144,28 @@ return function(ctx)
     assert(done == false)
   end)
 
+  run("emulator: kill pakai adb absolut", function()
+    setup()
+    local cmds = {}
+    mock.raw("fn.system", function(cmd) table.insert(cmds, tostring(cmd)) return "" end)
+    mock.raw("fn.exepath", function(name)
+      if name == "adb" then return "/sdk/platform-tools/adb" end
+      return ""
+    end)
+    mock.raw("fn.executable", function(p)
+      if tostring(p):find("platform%-tools/adb") then return 1 end
+      return 0
+    end)
+    mock.raw("defer_fn", function(fn) fn() end)
+    package.loaded["anvim.emulator"] = nil
+    package.loaded["anvim.util"] = nil
+    package.loaded["anvim.system_check"] = nil
+    local emu = require("anvim.emulator")
+    emu.kill("emulator-5554", function() end)
+    local joined = table.concat(cmds, "\n")
+    assert(joined:find("/sdk/platform-tools/adb", 1, true), "kill harus absolut, got: " .. joined)
+  end)
+
   run("emulator: launch tanpa binary gagal", function()
     setup()
     mock.raw("fn.exepath", function() return "" end)
