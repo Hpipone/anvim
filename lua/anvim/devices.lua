@@ -206,33 +206,51 @@ function M.adb_pair(target, on_done)
     return
   end
   alert.info("Pairing with " .. target .. " — check the code on your phone screen")
-  local finished = false
+  local finished, prompted = false, false
+  local outbuf = {}
   local function finish(ok)
     if finished then return end
     finished = true
     on_done(ok)
   end
+  local function maybe_prompt(job)
+    if finished or prompted then return end
+    local blob = table.concat(outbuf, "\n"):lower()
+    -- prompt adb bisa terpotong antar chunk ("Enter pair" + "ing code: ")
+    -- dan bisa lewat stdout maupun stderr → cocokkan akumulasi
+    if not (blob:find("pairing code", 1, true) or (blob:find("enter", 1, true) and blob:find("code", 1, true))) then
+      return
+    end
+    prompted = true
+    vim.schedule(function()
+      if finished then return end
+      vim.fn.inputsave()
+      local code = vim.fn.input("Pairing code: ")
+      vim.fn.inputrestore()
+      if code == nil or vim.trim(code) == "" then
+        pcall(vim.fn.jobstop, job)
+        finish(false)
+        return
+      end
+      if pcall(vim.fn.chansend, job, vim.trim(code) .. "\n") == false then
+        alert.warn("Pair channel closed — try again")
+        finish(false)
+      end
+    end)
+  end
   local job = vim.fn.jobstart({ "adb", "pair", target }, {
     stdout_buffered = false,
+    stderr_buffered = false,
     on_stdout = function(_, data)
       if finished then return end
-      local blob = table.concat(data or {}, "\n"):lower()
-      if blob:find("pairing code") or blob:find("enter.*code") then
-        vim.schedule(function()
-          if finished then return end
-          vim.fn.inputsave()
-          local code = vim.fn.input("Pairing code: ")
-          vim.fn.inputrestore()
-          if code == nil or vim.trim(code) == "" then
-            pcall(vim.fn.jobstop, job)
-            finish(false)
-            return
-          end
-          pcall(vim.fn.chansend, job, vim.trim(code) .. "\n")
-        end)
-      end
+      for _, l in ipairs(data or {}) do table.insert(outbuf, l) end
+      maybe_prompt(job)
     end,
-    on_stderr = function() end,
+    on_stderr = function(_, data)
+      if finished then return end
+      for _, l in ipairs(data or {}) do table.insert(outbuf, l) end
+      maybe_prompt(job)
+    end,
     on_exit = function(_, code)
       if code == 0 then
         alert.ok("Paired with " .. target .. " — now connect IP:port")
@@ -245,7 +263,16 @@ function M.adb_pair(target, on_done)
   if job == nil or job <= 0 then
     alert.error("adb", "pair jobstart failed")
     finish(false)
+    return
   end
+  -- pengaman: jangan gantung selamanya bila prompt tak kunjung datang
+  vim.defer_fn(function()
+    if not finished and not prompted then
+      alert.warn("No pairing prompt from adb — is the IP:port correct?")
+      pcall(vim.fn.jobstop, job)
+      finish(false)
+    end
+  end, 120000)
 end
 
 --- Toggle: pilih command adb → isi argumen → jalan. on_done diteruskan.

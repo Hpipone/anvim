@@ -92,31 +92,14 @@ return function(ctx)
     end)
   end)
 
-  run("logcat: close_win tidak buka dashboard by default", function()
+  run("logcat: close_win selalu kembali ke dashboard", function()
     local dash_called = false
     package.loaded["anvim.dashboard"] = { open = function() dash_called = true end }
     lc.win = 32; lc.buf = 31; lc.running = true; lc.job_id = 1
     lc.close_win()
     assert(lc.win == nil)
-    assert(dash_called == false, "default no_dashboard=true → jangan buka dashboard")
-  end)
-
-  run("logcat: close_win buka dashboard jika opt-out", function()
-    package.loaded["anvim.config"] = {
-      get = function()
-        return { logcat = { max_lines = 5, filter_default = "I", no_dashboard_on_close = false } }
-      end,
-    }
-    local dash_called = false
-    package.loaded["anvim.dashboard"] = { open = function() dash_called = true end }
-    lc.win = 32; lc.buf = 31
-    lc.close_win()
-    assert(dash_called == true)
-    package.loaded["anvim.config"] = {
-      get = function()
-        return { logcat = { max_lines = 5, filter_default = "I", no_dashboard_on_close = true } }
-      end,
-    }
+    assert(lc.running == false, "job harus di-stop")
+    assert(dash_called == true, "tutup logcat harus buka dashboard")
   end)
 
   run("logcat: history di-trim ke max_lines", function()

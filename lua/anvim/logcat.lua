@@ -20,9 +20,7 @@ local function cfg_logcat()
   local ok, c = pcall(function() return require("anvim.config").get() end)
   local l = ok and c and c.logcat or {}
   local max = l.max_lines or vim.g.anvim_logcat_max or 5000
-  local no_dash = l.no_dashboard_on_close
-  if no_dash == nil then no_dash = true end
-  return { max_lines = max, no_dashboard_on_close = no_dash, filter_default = l.filter_default or "I" }
+  return { max_lines = max, filter_default = l.filter_default or "I" }
 end
 
 local function build_cmd(filter, tag)
@@ -252,11 +250,10 @@ function M.close_win()
     pcall(vim.api.nvim_win_close, M.win, true)
   end
   M.win = nil
-  if not cfg_logcat().no_dashboard_on_close then
-    vim.schedule(function()
-      pcall(require("anvim.dashboard").open)
-    end)
-  end
+  -- seperti check: keluar → kembali ke dashboard (bukan hilang ke kode)
+  vim.schedule(function()
+    pcall(require("anvim.dashboard").open)
+  end)
 end
 
 return M

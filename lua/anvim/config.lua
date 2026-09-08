@@ -4,7 +4,7 @@
 local M = {}
 
 M.defaults = {
-  version = "1.6.0",
+  version = "1.6.1",
   dashboard = {
     width = 0.8,
     height = 0.8,
@@ -25,7 +25,6 @@ M.defaults = {
   logcat = {
     max_lines = 5000,
     filter_default = "I",
-    no_dashboard_on_close = true,
   },
   tasks = {
     timeout_ms = 300000,

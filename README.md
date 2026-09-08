@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.6.0** — Stable (zero line highlights, pair flow, front task window)
+> **v1.6.1** — Stable (pair robust, logcat back to dashboard)
 
 ## Features
 
@@ -99,7 +99,7 @@ Custom tasks appear in the dashboard (★). No line highlights at all — cursor
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 155 unit tests, no framework
+nvim --headless -l tests/run.lua   # 156 unit tests, no framework
 ```
 
 ## Roadmap

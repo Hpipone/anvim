@@ -110,3 +110,8 @@
 - [x] Task output zindex depan + q/Esc tutup → kembali dashboard
 - [x] adb pair + input kode (chansend), preset toggle, hapus log done
 - [x] Tests 155 pass (17 suites)
+
+## Fase 14 — pair robust + logcat ke dashboard (DONE, v1.6.1)
+- [x] adb pair: akumulasi stdout+stderr, prompt sekali, timeout 120s
+- [x] Logcat keluar selalu kembali ke dashboard (opsi dihapus)
+- [x] Tests 156 pass (17 suites)

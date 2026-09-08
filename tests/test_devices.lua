@@ -211,4 +211,51 @@ return function(ctx)
     end
     assert(found == true, "preset pair wajib ada")
   end)
+
+  run("devices: pair prompt terpotong chunk tetap ketemu", function()
+    setup()
+    local captured = {}
+    mock.raw("fn.jobstart", function(_, opts)
+      captured.opts = opts
+      return 21
+    end)
+    mock.raw("fn.chansend", function(_, data) captured.sent = data return 1 end)
+    mock.raw("fn.jobstop", function() end)
+    mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
+    mock.raw("fn.inputsave", function() end)
+    mock.raw("fn.inputrestore", function() end)
+    mock.raw("fn.input", function() return "654321" end)
+    mock.raw("defer_fn", function() end)
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    local done = nil
+    d.adb_pair("192.168.1.5:37099", function(ok) done = ok end)
+    captured.opts.on_stdout(nil, { "Enter pair" })
+    assert(captured.sent == nil, "chunk separuh jangan prompt")
+    captured.opts.on_stdout(nil, { "ing code: " })
+    assert(captured.sent == "654321\n", "kode harus dikirim, got " .. tostring(captured.sent))
+    captured.opts.on_exit(nil, 0)
+    assert(done == true)
+  end)
+
+  run("devices: pair prompt via stderr juga ketemu", function()
+    setup()
+    local captured = {}
+    mock.raw("fn.jobstart", function(_, opts)
+      captured.opts = opts
+      return 21
+    end)
+    mock.raw("fn.chansend", function(_, data) captured.sent = data return 1 end)
+    mock.raw("fn.jobstop", function() end)
+    mock.raw("schedule", function(fn) if type(fn) == "function" then fn() end end)
+    mock.raw("fn.inputsave", function() end)
+    mock.raw("fn.inputrestore", function() end)
+    mock.raw("fn.input", function() return "111222" end)
+    mock.raw("defer_fn", function() end)
+    package.loaded["anvim.devices"] = nil
+    local d = require("anvim.devices")
+    d.adb_pair("192.168.1.5:37099", function() end)
+    captured.opts.on_stderr(nil, { "Enter pairing code: " })
+    assert(captured.sent == "111222\n", "stderr harus dipantau")
+  end)
 end
