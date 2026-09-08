@@ -2,7 +2,7 @@
 
 **Android / Flutter toolkit for Neovim.** Floating TUI dashboard — a lightweight alternative to Android Studio. Think lazygit for mobile dev.
 
-> **v1.4.1** — Stable (Fase 11: minimal highlight, adb console)
+> **v1.5.0** — Stable (cursor-only highlight, adb console, closable task window)
 
 ## Features
 
@@ -75,7 +75,7 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | `l` | Logcat |
 | `e` | Emulator |
 | `m` | Scrcpy |
-| `:` | adb console (connect IP:port, shell, ...) |
+| `:` | adb console (toggle: connect IP:port, shell, custom) |
 | `x` | Cancel task |
 | `q` | Quit |
 
@@ -89,16 +89,17 @@ Disable defaults: `vim.g.anvim_no_default_keymaps = true`
 | `:AnvimEmulator` / `:AnvimEmulatorKill` | Emulator |
 | `:AnvimScrcpy` / `:AnvimScrcpyKill` | Show phone screen |
 | `:AnvimAdb` | adb console with command toggle |
+| `:AnvimTaskClose` | Close task output window (q works too) |
 | `:AnvimHelp` | Help |
 
 Logcat keys: `V/D/I/W/E/F` level, `T` tag, `S` save, `yy` copy line, `/` search.
 
-Custom tasks appear in the dashboard (★). Minimal highlights (status colors on Info rows, cursor marks selection). Groups: `AnvimTitle/Header/Selected/Ok/Warn/Error/Hint`. Statusline: `require("anvim.statusline").lualine()`.
+Custom tasks appear in the dashboard (★). No line highlights at all — cursor (cursorline) marks selection. Groups: `AnvimTitle/Header/Selected/Ok/Warn/Error/Hint`. Statusline: `require("anvim.statusline").lualine()`.
 
 ## Tests
 
 ```sh
-nvim --headless -l tests/run.lua   # 147 unit tests, no framework
+nvim --headless -l tests/run.lua   # 149 unit tests, no framework
 ```
 
 ## Roadmap

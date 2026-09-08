@@ -206,15 +206,12 @@ end
 local function render(buf, items, selected, proj, dev_active, height, width)
   local ok, err = pcall(function()
     local content = {}
-    local hlmarks = {}
     local cur_sel_line = nil
 
-    local function add(l, g)
+    -- TANPA highlight baris: seleksi = cursor saja (cursorline).
+    -- (Extmark per baris pernah bikin highlight nyasar; dihapus total.)
+    local function add(l)
       table.insert(content, l)
-      -- JANGAN table.insert(marks, g): g=nil adalah no-op diam-diam di
-      -- LuaJIT sehingga array memadat dan highlight bergeser baris.
-      -- Simpan pasangan (baris, grup) hanya untuk yang ber-grup.
-      if g then table.insert(hlmarks, { line = #content, group = g }) end
     end
 
     add(center("a n v i m", width))
@@ -227,7 +224,7 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     end
     local diag = diag_line(proj)
     if diag then
-      add(center(diag, width), (diag:find("E[1-9]") and "AnvimError" or "AnvimWarn"))
+      add(center(diag, width))
     end
     add(center(string.rep("─", math.min(60, width - 4)), width))
     add("")
@@ -263,9 +260,7 @@ local function render(buf, items, selected, proj, dev_active, height, width)
         if is_sel then cur_sel_line = #content end
       elseif item.type == "health" then
         local line = (is_sel and prefix or "  ") .. syscheck_m.format_line(item.tool, item.result)
-        local g = item.result.status == "ok" and "AnvimOk"
-          or item.result.status == "old" and "AnvimWarn" or "AnvimError"
-        add(center(line, width), g)
+        add(center(line, width))
       end
     end
 
@@ -282,11 +277,8 @@ local function render(buf, items, selected, proj, dev_active, height, width)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
 
-    -- hapus highlight render sebelumnya (set_lines tidak hapus extmark)
+    -- bersihkan sisa highlight lama bila ada (sekarang tak ada yang baru)
     pcall(vim.api.nvim_buf_clear_namespace, buf, NS, 0, -1)
-    for _, h in ipairs(hlmarks) do
-      pcall(vim.api.nvim_buf_add_highlight, buf, NS, h.group, vert_pad + h.line - 1, 0, -1)
-    end
 
     if cur_sel_line then
       M.state.sel_line = vert_pad + cur_sel_line
@@ -616,13 +608,30 @@ end
 function M.do_adb()
   local ok, dev = pcall(require, "anvim.devices")
   if not ok then return end
-  dev.adb_pick(function()
-    -- sesudah connect/disconnect: refresh agar daftar device update
-    if M.state.open then
-      refresh_keep_selection()
-      local width, height = current_geom()
-      render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
+  local known = {}
+  pcall(function()
+    for _, d in ipairs(dev.list()) do known[d.id] = true end
+  end)
+  dev.adb_pick(function(adb_ok)
+    if not M.state.open then return end
+    if adb_ok then
+      -- connect/disconnect mengubah daftar: cari device baru → aktifkan
+      local fresh = {}
+      pcall(function() fresh = dev.list() end)
+      local new_id = nil
+      for _, d in ipairs(fresh) do
+        if not known[d.id] and d.status == "device" then new_id = d.id break end
+      end
+      if new_id then
+        dev.set_active(new_id)
+        alert.ok("Connected: " .. new_id .. " (active)")
+      else
+        alert.info("adb done — device list refreshed")
+      end
     end
+    refresh_keep_selection()
+    local width, height = current_geom()
+    render(M.state.buf, M.state.items, M.state.selected, M.state.proj, devices_m.get_active(), height, width)
   end)
 end
 

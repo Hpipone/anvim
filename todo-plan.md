@@ -97,3 +97,10 @@
 - [x] Rename mirror → scrcpy (user-facing)
 - [x] Konsol adb `:AnvimAdb` + key `:`: toggle preset (connect IP:port validasi, shell, custom), -s otomatis
 - [x] Tests 147 pass (17 suites)
+
+## Fase 12 — cursor-only, adb console, closable output (DONE, v1.5.0)
+- [x] Hapus semua extmark highlight dashboard (cursor + cursorline saja)
+- [x] Rename mirror → scrcpy (user-facing)
+- [x] Konsol adb `:` / `:AnvimAdb`: toggle preset, connect IP:port validasi, -s otomatis, auto-select device baru
+- [x] Task window: q/Esc + `:AnvimTaskClose` (buffer dipertahankan)
+- [x] Tests 149 pass (17 suites)

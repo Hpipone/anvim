@@ -579,17 +579,15 @@ return function(ctx)
     assert(cleared >= 2, "clear_namespace harus jalan tiap render, got " .. cleared)
   end)
 
-  run("dashboard: highlight hanya info + cursor", function()
-    local shown = {}
+  run("dashboard: tanpa highlight baris (cursor only)", function()
     local hls = {}
-    mock.raw("api.nvim_buf_set_lines", function(_, _, _, _, lines)
-      shown = {}
-      for _, l in ipairs(lines or {}) do table.insert(shown, l) end
-    end)
+    mock.raw("api.nvim_buf_set_lines", function() end)
     mock.raw("api.nvim_buf_clear_namespace", function() end)
     mock.raw("api.nvim_buf_add_highlight", function(_, _, group, line)
       table.insert(hls, { group = group, line = line })
     end)
+    local cursor_at = nil
+    mock.raw("api.nvim_win_set_cursor", function(_, pos) cursor_at = pos[1] end)
     package.loaded["anvim.system_check"] = {
       check_all = function() return {} end,
       last_results = function()
@@ -609,13 +607,41 @@ return function(ctx)
     dash.state.selected = 2
     dash.state.proj = { name = "test", type = "android" }
     hls = {}
+    cursor_at = nil
     dash.nav(0)
-    local sel_n, ok_n = 0, 0
-    for _, h in ipairs(hls) do
-      if h.group == "AnvimSelected" then sel_n = sel_n + 1 end
-      if h.group == "AnvimOk" then ok_n = ok_n + 1 end
-    end
-    assert(sel_n == 0, "tanpa Selected (cursor only), got " .. sel_n)
-    assert(ok_n == 1, "info tetap berwarna, got " .. ok_n)
+    assert(#hls == 0, "nol highlight baris, got " .. #hls)
+    assert(cursor_at ~= nil, "cursor harus snap ke baris terpilih")
+  end)
+
+  run("dashboard: task window bisa ditutup", function()
+    package.loaded["anvim.tasks"] = nil
+    local t = require("anvim.tasks")
+    t.state.buf = 51
+    t.state.win = 52
+    t.close_output()
+    assert(t.state.win == nil, "win harus nil")
+    assert(t.state.buf == 51, "buf dipertahankan")
+  end)
+
+  run("dashboard: do_adb auto-select device baru", function()
+    local active = nil
+    local calls = 0
+    package.loaded["anvim.devices"] = {
+      list = function()
+        calls = calls + 1
+        if calls <= 3 then return {} end
+        return { { id = "192.168.1.5:5555", model = "Pixel", status = "device" } }
+      end,
+      get_active = function() return active end,
+      set_active = function(id) active = id return true end,
+      adb_pick = function(cb) cb(true) end,
+    }
+    package.loaded["anvim.dashboard"] = nil
+    dash = require("anvim.dashboard")
+    dash.state.open = false; dash.state.buf = nil; dash.state.win = nil
+    dash.open()
+    dash.do_adb()
+    assert(active == "192.168.1.5:5555", "device baru harus aktif, got " .. tostring(active))
+    dash.close()
   end)
 end

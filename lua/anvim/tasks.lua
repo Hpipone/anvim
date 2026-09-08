@@ -134,6 +134,11 @@ local function ensure_output_win()
     pcall(vim.api.nvim_buf_set_name, buf, "anvim://task-output")
     vim.bo[buf].bufhidden = "hide"
     vim.bo[buf].filetype = "anvim-task"
+    -- window output bisa ditutup user (q): buffer + history job tetap ada
+    pcall(vim.keymap.set, "n", "q", function() M.close_output() end,
+      { buffer = buf, nowait = true, silent = true, desc = "Close task output" })
+    pcall(vim.keymap.set, "n", "<Esc>", function() M.close_output() end,
+      { buffer = buf, nowait = true, silent = true, desc = "Close task output" })
   end
   local win = M.state.win
   if not (win and vim.api.nvim_win_is_valid(win)) then
@@ -143,11 +148,20 @@ local function ensure_output_win()
     win = vim.api.nvim_open_win(buf, false, {
       relative = "editor", width = cols - 2, height = math.max(8, h),
       col = 1, row = lines - h - 1, style = "minimal", border = "rounded",
-      title = " anvim task ", title_pos = "center",
+      title = " anvim task (q to close) ", title_pos = "center",
     })
     M.state.win = win
   end
   return buf, win
+end
+
+--- Tutup window output (buffer dipertahankan; run berikutnya pakai lagi).
+--- Tidak stop job yang jalan — pakai x di dashboard / tasks.stop().
+function M.close_output()
+  if M.state.win and vim.api.nvim_win_is_valid(M.state.win) then
+    pcall(vim.api.nvim_win_close, M.state.win, true)
+  end
+  M.state.win = nil
 end
 
 local function append_output(buf, data)
